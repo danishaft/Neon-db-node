@@ -203,3 +203,37 @@ export function buildSelectColumns(outputColumns: string[]): string {
 
 	return outputColumns.join(', ');
 }
+
+// ============================================================================
+// SECURE EXECUTE QUERY UTILITIES
+// ============================================================================
+
+/**
+ * Extracts n8n resolvable expressions from text
+ * Used for processing n8n expressions in SQL queries and parameters
+ */
+export function getResolvables(text: string): string[] {
+	const resolvableRegex = /{{[\s\S]*?}}/g;
+	return text.match(resolvableRegex) || [];
+}
+
+/**
+ * Converts comma-separated string to array
+ * Used for parsing query parameters from user input
+ */
+export function stringToArray(value: string): string[] {
+	return value.split(',').filter(entry => entry).map(entry => entry.trim());
+}
+
+/**
+ * Checks if a value is valid JSON
+ * Used for determining how to handle parameter values
+ */
+export function isJSON(value: any): boolean {
+	try {
+		JSON.parse(value);
+		return true;
+	} catch {
+		return false;
+	}
+}
