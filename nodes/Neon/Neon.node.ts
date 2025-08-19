@@ -8,11 +8,13 @@ import type {
 	INodeTypeDescription,
 	INodeListSearchResult,
 	ResourceMapperFields,
+	IExecuteFunctions,
+	INodeExecutionData,
 } from 'n8n-workflow';
 import { NodeConnectionType, NodeOperationError } from 'n8n-workflow';
 
 import { validateNeonCredentials, configureNeon } from './helpers/connection';
-import { buildColumnDescription, mapPostgresType, getEnumValues } from './helpers/utils';
+import { buildColumnDescription, mapPostgresType, getEnumValues, buildSelectColumns, buildSortClause, buildWhereClause } from './helpers/utils';
 import type { NeonNodeCredentials } from './helpers/interface';
 
 export class Neon implements INodeType {
@@ -700,6 +702,209 @@ export class Neon implements INodeType {
 				}
 			},
 		},
+
+		async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
+			const returnData: INodeExecutionData[] = [];
+			const resource = this.getNodeParameter('resource', 0) as string;
+			const operation = this.getNodeParameter('operation', 0) as string;
+
+			// Get credentials
+			const credentials = await this.getCredentials('neonApi') as NeonNodeCredentials;
+
+			if (resource === 'row') {
+				if (operation === 'executeQuery') {
+					// Handle custom SQL query execution
+					const query = this.getNodeParameter('query', 0) as string;
+
+					try {
+						// Execute query using configureNeon
+						const { db } = await configureNeon(credentials);
+						const result = await db.any(query);
+
+						// Return the results
+						for (const item of result) {
+							returnData.push({
+								json: item,
+							});
+						}
+
+					} catch (error) {
+						throw new NodeOperationError(this.getNode(), `Query execution failed: ${error.message}`);
+					}
+				} else if (operation === 'get' || operation === 'getAll') {
+					// Handle SELECT operations
+					try {
+						const { db } = await configureNeon(credentials);
+
+						// Get parameters with extractValue support
+						const schema = this.getNodeParameter('schema', 0, { extractValue: true }) as string;
+						const table = this.getNodeParameter('tableId', 0, { extractValue: true }) as string;
+						const outputColumns = this.getNodeParameter('outputColumns', 0) as string[];
+						const whereParams = this.getNodeParameter('where', 0) as any;
+						const sortParams = this.getNodeParameter('sort', 0) as any;
+						const limit = operation === 'get' ? 1 : undefined;
+
+						if (!schema || !table) {
+							throw new NodeOperationError(this.getNode(), 'Schema and table are required for SELECT operations');
+						}
+
+						// Build the SELECT query
+						const columns = buildSelectColumns(outputColumns);
+						const { clause: whereClause, values: whereValues } = buildWhereClause(whereParams, schema, table);
+						const sortClause = buildSortClause(sortParams);
+
+						let query = `SELECT ${columns} FROM ${schema}.${table}`;
+						if (whereClause) query += ` ${whereClause}`;
+						if (sortClause) query += ` ${sortClause}`;
+						if (limit) query += ` LIMIT ${limit}`;
+
+						// Execute the query
+						const result = await db.any(query, whereValues);
+
+						// Return the results
+						for (const item of result) {
+							returnData.push({
+								json: item,
+							});
+						}
+
+					} catch (error) {
+						throw new NodeOperationError(this.getNode(), `SELECT operation failed: ${error.message}`);
+					}
+				} else if (operation === 'create') {
+					// Handle INSERT operations
+					try {
+						const { db } = await configureNeon(credentials);
+
+						// Get parameters
+						const schema = this.getNodeParameter('schema', 0, { extractValue: true }) as string;
+						const table = this.getNodeParameter('tableId', 0, { extractValue: true }) as string;
+						const dataToSend = this.getNodeParameter('dataToSend', 0) as any;
+
+						if (!schema || !table) {
+							throw new NodeOperationError(this.getNode(), 'Schema and table are required for INSERT operations');
+						}
+
+						// Get input data
+						const items = this.getInputData();
+
+						for (let i = 0; i < items.length; i++) {
+							const item = items[i];
+							const data = dataToSend.fields ? dataToSend.fields : item.json;
+
+							// Build INSERT query
+							const columns = Object.keys(data);
+							const values = Object.values(data);
+							const placeholders = values.map((_, index) => `$${index + 1}`);
+
+							const query = `INSERT INTO ${schema}.${table} (${columns.join(', ')}) VALUES (${placeholders.join(', ')}) RETURNING *`;
+
+							// Execute INSERT
+							const result = await db.one(query, values);
+
+							returnData.push({
+								json: result,
+							});
+						}
+
+					} catch (error) {
+						throw new NodeOperationError(this.getNode(), `INSERT operation failed: ${error.message}`);
+					}
+				} else if (operation === 'update') {
+					// Handle UPDATE operations
+					try {
+						const { db } = await configureNeon(credentials);
+
+						// Get parameters
+						const schema = this.getNodeParameter('schema', 0, { extractValue: true }) as string;
+						const table = this.getNodeParameter('tableId', 0, { extractValue: true }) as string;
+						const dataToSend = this.getNodeParameter('dataToSend', 0) as any;
+						const whereParams = this.getNodeParameter('where', 0) as any;
+
+						if (!schema || !table) {
+							throw new NodeOperationError(this.getNode(), 'Schema and table are required for UPDATE operations');
+						}
+
+						// Get input data
+						const items = this.getInputData();
+
+						for (let i = 0; i < items.length; i++) {
+							const item = items[i];
+							const data = dataToSend.fields ? dataToSend.fields : item.json;
+
+							// Build UPDATE query
+							const setClause = Object.keys(data).map((key, index) => `${key} = $${index + 1}`).join(', ');
+							const { clause: whereClause, values: whereValues } = buildWhereClause(whereParams, schema, table);
+
+							if (!whereClause) {
+								throw new NodeOperationError(this.getNode(), 'WHERE clause is required for UPDATE operations');
+							}
+
+							const values = [...Object.values(data), ...whereValues];
+							const query = `UPDATE ${schema}.${table} SET ${setClause} ${whereClause} RETURNING *`;
+
+							// Execute UPDATE
+							const result = await db.any(query, values);
+
+							for (const row of result) {
+								returnData.push({
+									json: row,
+								});
+							}
+						}
+
+					} catch (error) {
+						throw new NodeOperationError(this.getNode(), `UPDATE operation failed: ${error.message}`);
+					}
+				} else if (operation === 'delete') {
+					// Handle DELETE operations
+					try {
+						const { db } = await configureNeon(credentials);
+
+						// Get parameters
+						const schema = this.getNodeParameter('schema', 0, { extractValue: true }) as string;
+						const table = this.getNodeParameter('tableId', 0, { extractValue: true }) as string;
+						const whereParams = this.getNodeParameter('where', 0) as any;
+
+						if (!schema || !table) {
+							throw new NodeOperationError(this.getNode(), 'Schema and table are required for DELETE operations');
+						}
+
+						// Build DELETE query
+						const { clause: whereClause, values: whereValues } = buildWhereClause(whereParams, schema, table);
+
+						if (!whereClause) {
+							throw new NodeOperationError(this.getNode(), 'WHERE clause is required for DELETE operations');
+						}
+
+						const query = `DELETE FROM ${schema}.${table} ${whereClause} RETURNING *`;
+
+						// Execute DELETE
+						const result = await db.any(query, whereValues);
+
+						for (const row of result) {
+							returnData.push({
+								json: row,
+							});
+						}
+
+					} catch (error) {
+						throw new NodeOperationError(this.getNode(), `DELETE operation failed: ${error.message}`);
+					}
+				} else {
+					// Unknown operation
+					returnData.push({
+						json: {
+							message: `Operation '${operation}' not yet implemented`,
+							operation,
+							resource,
+						},
+					});
+				}
+			}
+
+			return [returnData];
+		}
 	};
 
 }
