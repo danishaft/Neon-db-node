@@ -1,19 +1,19 @@
 {
-  "name": "n8n-nodes-<...>",
-  "version": "0.1.0",
-  "description": "",
-  "keywords": [
-    "n8n-community-node-package"
-  ],
-  "license": "MIT",
-  "homepage": "",
-  "author": {
-    "name": "",
-    "email": ""
-  },
+  "name": "n8n-nodes-neon",
+	"version": "0.1.0",
+	"description": "n8n node to connect to Neon Postgres database.",
+	"keywords": [
+		"n8n-community-node-package"
+	],
+	"license": "MIT",
+	"homepage": "https://n8n.io",
+	"author": {
+		"name": "Test",
+		"email": "test@example.com"
+	},
   "repository": {
     "type": "git",
-    "url": "https://github.com/<...>/n8n-nodes-<...>.git"
+    "url": "https://github.com/danishaft/Neon-db-node"
   },
   "engines": {
     "node": ">=20.15"
@@ -32,22 +32,29 @@
   ],
   "n8n": {
     "n8nNodesApiVersion": 1,
-    "credentials": [
-      "dist/credentials/ExampleCredentialsApi.credentials.js",
-      "dist/credentials/HttpBinApi.credentials.js"
-    ],
-    "nodes": [
-      "dist/nodes/ExampleNode/ExampleNode.node.js",
-      "dist/nodes/HttpBin/HttpBin.node.js"
-    ]
+		"credentials": [
+			"dist/credentials/NeonApi.credentials.js"
+		],
+		"nodes": [
+			"dist/nodes/Neon/Neon.node.js"
+		]
   },
   "devDependencies": {
     "@typescript-eslint/parser": "~8.32.0",
+    "@types/pg": "^8.11.0",
+    "@types/lodash": "^4.14.202",
+    "@types/uuid": "^9.0.7",
     "eslint": "^8.57.0",
     "eslint-plugin-n8n-nodes-base": "^1.16.3",
     "gulp": "^5.0.0",
     "prettier": "^3.5.3",
     "typescript": "^5.8.2"
+  },
+  "dependencies": {
+    "pg-promise": "^11.6.0",
+    "pg": "^8.11.3",
+    "lodash": "^4.17.21",
+    "uuid": "^9.0.1"
   },
   "peerDependencies": {
     "n8n-workflow": "*"

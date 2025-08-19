@@ -6,3 +6,7 @@ dist
 npm-debug.log*
 yarn.lock
 .vscode/launch.json
+
+__schema__/v1.0.0
+/ai
+.qodo
