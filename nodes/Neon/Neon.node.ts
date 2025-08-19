@@ -467,6 +467,194 @@ export class Neon implements INodeType {
 	};
 
 	methods = {
+		loadOptions: {
+			// Column Discovery (for dropdowns)
+			async getTableColumns(this: ILoadOptionsFunctions): Promise<INodePropertyOptions[]> {
+				const returnData: INodePropertyOptions[] = [];
+
+				try {
+					const credentials = await this.getCredentials('neonApi') as NeonNodeCredentials;
+					const { db } = await configureNeon(credentials);
+
+					// Get schema and table with extractValue support
+					const schema = this.getNodeParameter('schema', 'public', {
+						extractValue: true,
+					}) as string;
+
+					const tableName = this.getNodeParameter('tableId', '', {
+						extractValue: true,
+					}) as string;
+
+					if (!schema || !tableName) {
+						return returnData;
+					}
+
+					// Enhanced column discovery with better metadata
+					const columns = await db.any(`
+						SELECT
+							column_name,
+							data_type,
+							is_nullable,
+							udt_name,
+							column_default,
+							character_maximum_length,
+							numeric_precision,
+							numeric_scale
+						FROM information_schema.columns
+						WHERE table_schema = $1 AND table_name = $2
+						ORDER BY ordinal_position
+					`, [schema, tableName]);
+
+					// Format the results with better descriptions and enum values
+					for (const column of columns) {
+						let description = buildColumnDescription(column);
+
+						// Add enum values if it's an enum type
+						if (column.data_type === 'USER-DEFINED' && column.udt_name) {
+							try {
+								const enumValues = await getEnumValues(db, column.udt_name);
+								if (enumValues.length > 0) {
+									description += `, Values: [${enumValues.join(', ')}]`;
+								}
+							} catch (error) {
+								// Gracefully handle enum discovery errors
+								console.warn(`Failed to get enum values for ${column.udt_name}:`, error.message);
+							}
+						}
+
+						returnData.push({
+							name: column.column_name,
+							value: column.column_name,
+							description: description,
+						});
+					}
+
+				} catch (error) {
+					throw new NodeOperationError(this.getNode(), `Failed to load columns: ${error.message}`);
+				}
+
+				return returnData;
+			},
+		},
+
+		listSearch: {
+			// Schema Discovery (for resource locator)
+			async getSchemas(this: ILoadOptionsFunctions): Promise<INodeListSearchResult> {
+				try {
+					const credentials = await this.getCredentials('neonApi') as NeonNodeCredentials;
+					const { db } = await configureNeon(credentials);
+
+					// Get all user schemas, filter out system schemas
+					const schemas = await db.any(`
+						SELECT schema_name
+						FROM information_schema.schemata
+						WHERE schema_name NOT IN ('information_schema', 'pg_catalog', 'pg_toast')
+						ORDER BY schema_name
+					`);
+
+					return {
+						results: schemas.map((schema) => ({
+							name: schema.schema_name,
+							value: schema.schema_name,
+						})),
+					};
+
+				} catch (error) {
+					throw new NodeOperationError(this.getNode(), `Failed to load schemas: ${error.message}`);
+				}
+			},
+
+			// Table Discovery (for resource locator)
+			async getTables(this: ILoadOptionsFunctions): Promise<INodeListSearchResult> {
+				try {
+					const credentials = await this.getCredentials('neonApi') as NeonNodeCredentials;
+					const { db } = await configureNeon(credentials);
+
+					// Get schema with extractValue support
+					const schema = this.getNodeParameter('schema', 'public', {
+						extractValue: true,
+					}) as string;
+
+					if (!schema) {
+						return { results: [] };
+					}
+
+					// Get tables with better context
+					const tables = await db.any(`
+						SELECT
+							table_name,
+							table_type
+						FROM information_schema.tables
+						WHERE table_schema = $1
+						ORDER BY table_name
+					`, [schema]);
+
+					return {
+						results: tables.map((table) => ({
+							name: table.table_name,
+							value: table.table_name,
+						})),
+					};
+
+				} catch (error) {
+					throw new NodeOperationError(this.getNode(), `Failed to load tables: ${error.message}`);
+				}
+			},
+		},
+
+		resourceMapping: {
+			// Resource Mapping (for advanced field mapping)
+			async getMappingColumns(this: ILoadOptionsFunctions): Promise<ResourceMapperFields> {
+				try {
+					const credentials = await this.getCredentials('neonApi') as NeonNodeCredentials;
+					const { db } = await configureNeon(credentials);
+
+					const schema = this.getNodeParameter('schema', 'public', {
+						extractValue: true,
+					}) as string;
+
+					const tableName = this.getNodeParameter('tableId', '', {
+						extractValue: true,
+					}) as string;
+
+					if (!schema || !tableName) {
+						return { fields: [] };
+					}
+
+					// Get enhanced column schema for resource mapping
+					const columns = await db.any(`
+						SELECT
+							column_name,
+							data_type,
+							is_nullable,
+							udt_name,
+							column_default
+						FROM information_schema.columns
+						WHERE table_schema = $1 AND table_name = $2
+						ORDER BY ordinal_position
+					`, [schema, tableName]);
+
+					// Convert to n8n resource mapper format
+					const fields = columns.map((column) => ({
+						id: column.column_name,
+						name: column.column_name,
+						type: mapPostgresType(column.data_type),
+						required: column.is_nullable === 'NO',
+						default: column.column_default || undefined,
+						displayName: column.column_name,
+						description: `Type: ${column.data_type}, Nullable: ${column.is_nullable}`,
+						defaultMatch: false,
+						display: true,
+					}));
+
+					return { fields };
+
+				} catch (error) {
+					throw new NodeOperationError(this.getNode(), `Failed to load mapping columns: ${error.message}`);
+				}
+			},
+		},
+
 		credentialTest: {
 			async neonApiCredentialTest(
 				this: ICredentialTestFunctions,
