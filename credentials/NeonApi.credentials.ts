@@ -1,5 +1,4 @@
 import {
-	IAuthenticateGeneric,
 	ICredentialType,
 	INodeProperties,
 } from 'n8n-workflow';
@@ -72,14 +71,5 @@ export class NeonApi implements ICredentialType {
 			description: 'Neon requires SSL for all connections. `Require` is the recommended setting.',
 		},
 	];
-
-	authenticate: IAuthenticateGeneric = {
-		type: 'generic',
-		properties: {
-			// Note: For Postgres connections, we'll handle authentication in the node logic
-			// rather than through HTTP headers like Supabase
-		},
-	};
-
 
 }
