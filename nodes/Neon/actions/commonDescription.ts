@@ -90,3 +90,222 @@ export const optionsCollection: INodeProperties = {
 	],
 };
 
+export const schemaRLC: INodeProperties = {
+	displayName: 'Schema',
+	name: 'schema',
+	type: 'resourceLocator',
+	default: { mode: 'list', value: 'public' },
+	description: 'The schema to use',
+	modes: [
+		{
+			displayName: 'From List',
+			name: 'list',
+			type: 'list',
+		},
+		{
+			displayName: 'Name',
+			name: 'name',
+			type: 'string',
+			placeholder: 'e.g. public',
+		},
+	],
+	displayOptions: {
+		show: {
+			'/operation': ['insert', 'select', 'update', 'delete'],
+		},
+	},
+};
+
+export const tableRLC: INodeProperties = {
+	displayName: 'Table',
+	name: 'tableId',
+	type: 'resourceLocator',
+	default: { mode: 'list', value: '' },
+	description: 'The table to use',
+	modes: [
+		{
+			displayName: 'From List',
+			name: 'list',
+			type: 'list',
+		},
+		{
+			displayName: 'Name',
+			name: 'name',
+			type: 'string',
+			placeholder: 'e.g. users',
+		},
+	],
+	displayOptions: {
+		show: {
+			'/operation': ['insert', 'select', 'update', 'delete'],
+		},
+	},
+};
+
+export const outputColumns: INodeProperties = {
+	displayName: 'Output Column Names or IDs',
+	name: 'outputColumns',
+	type: 'multiOptions',
+	description: 'Choose from the list, or specify IDs using an <a href="https://docs.n8n.io/code/expressions/" target="_blank">expression</a>. Choose from the list, or specify IDs using an <a href="https://docs.n8n.io/code/expressions/">expression</a>.',
+	typeOptions: {
+		loadOptionsMethod: 'getTableColumns',
+		loadOptionsDependsOn: ['schema.value', 'tableId.value'],
+	},
+	default: [],
+};
+
+export const whereFixedCollection: INodeProperties = {
+	displayName: 'Select Rows',
+	name: 'where',
+	type: 'fixedCollection',
+	typeOptions: {
+		multipleValues: true,
+	},
+	placeholder: 'Add Condition',
+	default: {},
+	description: 'If not set, all rows will be selected',
+	options: [
+		{
+			displayName: 'Values',
+			name: 'values',
+			values: [
+				{
+					displayName: 'Column Name or ID',
+					name: 'column',
+					type: 'options',
+					description: 'Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/" target="_blank">expression</a>. Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>.',
+					default: '',
+					placeholder: 'e.g. ID',
+					typeOptions: {
+						loadOptionsMethod: 'getTableColumns',
+						loadOptionsDependsOn: ['schema.value', 'tableId.value'],
+					},
+				},
+				{
+					displayName: 'Operator',
+					name: 'condition',
+					type: 'options',
+					description:
+						"The operator to check the column against. When using 'LIKE' operator percent sign ( %) matches zero or more characters, underscore ( _ ) matches any single character.",
+					options: [
+						{
+							name: 'Equal',
+							value: 'equal',
+						},
+						{
+							name: 'Greater Than',
+							value: '>',
+						},
+						{
+							name: 'Greater Than Or Equal',
+							value: '>=',
+						},
+						{
+							name: 'Is Not Null',
+							value: 'IS NOT NULL',
+						},
+						{
+							name: 'Is Null',
+							value: 'IS NULL',
+						},
+						{
+							name: 'Less Than',
+							value: '<',
+						},
+						{
+							name: 'Less Than Or Equal',
+							value: '<=',
+						},
+						{
+							name: 'Like',
+							value: 'LIKE',
+						},
+						{
+							name: 'Not Equal',
+							value: '!=',
+						},
+					],
+					default: 'equal',
+				},
+				{
+					displayName: 'Value',
+					name: 'value',
+					type: 'string',
+					// displayOptions: {
+					// 	hide: {
+					// 		condition: ['IS NULL', 'IS NOT NULL'],
+					// 	},
+					// },
+					default: '',
+				},
+			],
+		},
+	],
+};
+
+export const sortFixedCollection: INodeProperties = {
+	displayName: 'Sort',
+	name: 'sort',
+	type: 'fixedCollection',
+	typeOptions: {
+		multipleValues: true,
+	},
+	placeholder: 'Add Sort Rule',
+	default: {},
+	options: [
+		{
+			displayName: 'Values',
+			name: 'values',
+			values: [
+				{
+					displayName: 'Column Name or ID',
+					name: 'column',
+					type: 'options',
+					description: 'Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/" target="_blank">expression</a>. Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>.',
+					default: '',
+					typeOptions: {
+						loadOptionsMethod: 'getTableColumns',
+						loadOptionsDependsOn: ['schema.value', 'tableId.value'],
+					},
+				},
+				{
+					displayName: 'Direction',
+					name: 'direction',
+					type: 'options',
+					options: [
+						{
+							name: 'ASC',
+							value: 'ASC',
+						},
+						{
+							name: 'DESC',
+							value: 'DESC',
+						},
+					],
+					default: 'ASC',
+				},
+			],
+		},
+	],
+};
+
+export const combineConditionsCollection: INodeProperties = {
+	displayName: 'Combine Conditions',
+	name: 'combineConditions',
+	type: 'options',
+	description:
+		'How to combine the conditions defined in "Select Rows": AND requires all conditions to be true, OR requires at least one condition to be true',
+	options: [
+		{
+			name: 'AND',
+			value: 'AND',
+			description: 'Only rows that meet all the conditions are selected',
+		},
+		{
+			name: 'OR',
+			value: 'OR',
+			description: 'Rows that meet at least one condition are selected',
+		},
+	],
+	default: 'AND',
+};
