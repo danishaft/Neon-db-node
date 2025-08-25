@@ -202,11 +202,26 @@ export type NeonNodeOptions = {
 	/** Connection timeout in milliseconds */
 	connectionTimeout?: number;
 
+	/** Delay closing idle connection in seconds */
+	delayClosingIdleConnection?: number;
+
+	/** How to handle large numbers (string vs number) */
+	outputLargeFormatNumberAs?: 'string' | 'number';
+
 	/** Neon-specific: which database branch to use */
 	branchName?: string;
 
 	/** Neon-specific: whether to check compute status before connecting */
 	checkComputeStatus?: boolean;
+
+	/** Whether to replace empty strings with NULL values */
+	replaceEmptyStrings?: boolean;
+
+	/** Whether to treat query parameters in single quotes as text */
+	treatQueryParametersInSingleQuotesAsText?: boolean;
+
+	/** Database connection (passed from main node) */
+	db?: NeonDatabase;
 };
 
 // ============================================================================
