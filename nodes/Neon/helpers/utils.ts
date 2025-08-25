@@ -1,6 +1,8 @@
-import type { FieldType } from 'n8n-workflow';
+import type { FieldType, IDisplayOptions, INodeProperties } from 'n8n-workflow';
 import type { ColumnInfo } from './interface';
 import { neonFieldTypeMapping } from './interface';
+import { merge } from 'lodash';
+import type { INodeExecutionData } from 'n8n-workflow';
 
 // ============================================================================
 // COLUMN DESCRIPTION HELPERS
@@ -192,48 +194,3 @@ export function buildSortClause(sortParams: any): string {
 	return `ORDER BY ${orders.join(', ')}`;
 }
 
-/**
- * Builds SELECT columns clause from UI parameters
- * Converts the UI output columns configuration to actual SQL SELECT clause
- */
-export function buildSelectColumns(outputColumns: string[]): string {
-	if (!outputColumns || outputColumns.length === 0) {
-		return '*';
-	}
-
-	return outputColumns.join(', ');
-}
-
-// ============================================================================
-// SECURE EXECUTE QUERY UTILITIES
-// ============================================================================
-
-/**
- * Extracts n8n resolvable expressions from text
- * Used for processing n8n expressions in SQL queries and parameters
- */
-export function getResolvables(text: string): string[] {
-	const resolvableRegex = /{{[\s\S]*?}}/g;
-	return text.match(resolvableRegex) || [];
-}
-
-/**
- * Converts comma-separated string to array
- * Used for parsing query parameters from user input
- */
-export function stringToArray(value: string): string[] {
-	return value.split(',').filter(entry => entry).map(entry => entry.trim());
-}
-
-/**
- * Checks if a value is valid JSON
- * Used for determining how to handle parameter values
- */
-export function isJSON(value: any): boolean {
-	try {
-		JSON.parse(value);
-		return true;
-	} catch {
-		return false;
-	}
-}
