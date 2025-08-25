@@ -10,3 +10,4 @@ yarn.lock
 __schema__/v1.0.0
 /ai
 .qodo
+/coverage
