@@ -7,7 +7,6 @@ import pgPromise from 'pg-promise';
 
 /**
  * Builds connection configuration for Neon database
- * Following n8n Postgres pattern for consistency
  */
 export function buildNeonConfig(credentials: NeonNodeCredentials, options?: NeonNodeOptions): NeonConnectionParameters {
 	return {
@@ -18,9 +17,8 @@ export function buildNeonConfig(credentials: NeonNodeCredentials, options?: Neon
 		password: credentials.password,
 		ssl: credentials.ssl === 'require' ? true : false,
 
-		// Production-ready connection settings (following n8n Postgres pattern)
-		keepAlive: true,                 // Maintain connections
-		max: 5,                          // Max connections in pool (lower than Postgres default)
+		keepAlive: true,
+		max: 5,                          // Max connections in pool
 		connectionTimeoutMillis: 30000,  // 30 seconds connection timeout
 		keepAliveInitialDelayMillis: (options?.delayClosingIdleConnection || 0) * 1000, // Convert seconds to milliseconds
 	};
@@ -31,8 +29,8 @@ export function buildNeonConfig(credentials: NeonNodeCredentials, options?: Neon
 // ============================================================================
 
 /**
- * Sets up Neon database connection (similar to configurePostgres)
- * Following n8n Postgres pattern for consistency
+ * Sets up Neon database connection
+
  */
 // Connection pool for reuse within the same node execution
 let connectionPool: NeonConnectionsData | null = null;
@@ -51,7 +49,6 @@ export async function configureNeon(
 	const pgp = pgPromise();
 
 	// Configure type parsers for large numbers if option is set to 'number'
-	// This follows the same pattern as n8n Postgres V2 node
 	if (options?.outputLargeFormatNumberAs === 'number') {
 		// Configure pg-promise to parse BIGINT (type 20) and NUMERIC (type 1700) as JavaScript numbers
 		// Type 20 = BIGINT, Type 1700 = NUMERIC/DECIMAL
@@ -76,7 +73,6 @@ export async function configureNeon(
 
 /**
  * Validates Neon database credentials by attempting a connection
- * Following n8n Postgres pattern for consistency
  */
 export async function validateNeonCredentials(
 	credentials: NeonNodeCredentials,
