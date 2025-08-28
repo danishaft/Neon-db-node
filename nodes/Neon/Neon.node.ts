@@ -96,6 +96,7 @@ export class Neon implements INodeType {
 				const items = this.getInputData();
 				const nodeOptions = {
 					queryMode: this.getNodeParameter('options.queryMode', 0, 'single') as any,
+					queryParameters: this.getNodeParameter('options.queryParameters', 0, '') as string,
 					delayClosingIdleConnection: this.getNodeParameter('options.delayClosingIdleConnection', 0, 0) as number,
 					outputLargeFormatNumberAs: this.getNodeParameter('options.outputLargeFormatNumberAs', 0, 'string') as 'string' | 'number',
 					replaceEmptyStrings: this.getNodeParameter('options.replaceEmptyStrings', 0, false) as boolean,
@@ -106,7 +107,7 @@ export class Neon implements INodeType {
 
 				// Call the operation with database connection
 				const result = await executeQueryOperation.call(this, items, { ...nodeOptions, db });
-				return [result];
+				returnData.push(...result);
 			} else if (operation === 'select') {
 				// Use separated SELECT operation
 				try {
@@ -120,15 +121,15 @@ export class Neon implements INodeType {
 				}
 			} else if (operation === 'insert') {
 				// Use separated INSERT operation
-				try {
-					const { db } = await configureNeon(credentials);
 					const items = this.getInputData();
-					const nodeOptions = {};
-					const result = await insertExecute.call(this, items, { ...nodeOptions, db } as any);
+					const nodeOptions = {
+						replaceEmptyStrings: this.getNodeParameter('options.replaceEmptyStrings', 0, false) as boolean,
+					};
+
+					const { db, client } = await configureNeon(credentials, nodeOptions);
+
+					const result = await insertExecute.call(this, items, { ...nodeOptions, db, client} as any);
 					returnData.push(...result);
-				} catch (error) {
-					throw new NodeOperationError(this.getNode(), `INSERT operation failed: ${error.message}`);
-				}
 			} else if (operation === 'update') {
 				// Use separated UPDATE operation
 				try {
