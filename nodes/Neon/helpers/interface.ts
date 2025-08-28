@@ -193,14 +193,14 @@ export type QueriesRunner = (
  * Simplified from the full Postgres node options to focus on Neon-specific needs
  */
 export type NeonNodeOptions = {
-	/** The operation to perform (create, read, update, delete, execute) */
+	/** The operation to perform (insert, select, executeQuery, delete, update, insertOrUpdate) */
 	operation?: string;
 
 	/** How to handle multiple queries (single, transaction, independently) */
 	queryMode?: QueryMode;
 
-	/** Connection timeout in milliseconds */
-	connectionTimeout?: number;
+	/** Query parameters */
+	queryParameters?: string | number | string[] | number[];
 
 	/** Delay closing idle connection in seconds */
 	delayClosingIdleConnection?: number;
@@ -208,20 +208,20 @@ export type NeonNodeOptions = {
 	/** How to handle large numbers (string vs number) */
 	outputLargeFormatNumberAs?: 'string' | 'number';
 
+	/** Whether to replace empty strings with NULL values */
+	replaceEmptyStrings?: boolean;
+
+	/** Whether to skip on conflict */
+	skipOnConflict?: boolean;
+
+	/** Database connection (passed from main node) */
+	db?: NeonDatabase;
+
 	/** Neon-specific: which database branch to use */
 	branchName?: string;
 
 	/** Neon-specific: whether to check compute status before connecting */
 	checkComputeStatus?: boolean;
-
-	/** Whether to replace empty strings with NULL values */
-	replaceEmptyStrings?: boolean;
-
-	/** Whether to treat query parameters in single quotes as text */
-	treatQueryParametersInSingleQuotesAsText?: boolean;
-
-	/** Database connection (passed from main node) */
-	db?: NeonDatabase;
 };
 
 // ============================================================================

@@ -1,6 +1,6 @@
 import { INodeProperties } from "n8n-workflow";
 
-import { schemaRLC, tableRLC } from '../commonDescription';
+import { schemaRLC, tableRLC } from '../common.description';
 import { description as selectDescription } from './select.operation';
 import { description as insertDescription } from './insert.operation';
 import { description as updateDescription } from './update.operation';

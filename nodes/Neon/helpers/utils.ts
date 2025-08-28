@@ -1,8 +1,8 @@
-import type { FieldType, IDisplayOptions, INodeProperties } from 'n8n-workflow';
-import type { ColumnInfo } from './interface';
+import { jsonParse, NodeOperationError, type FieldType, type IDataObject, type IDisplayOptions, type INodeProperties } from 'n8n-workflow';
+import type { ColumnInfo, NeonClient, NeonDatabase } from './interface';
 import { neonFieldTypeMapping } from './interface';
 import { merge } from 'lodash';
-import type { INodeExecutionData } from 'n8n-workflow';
+import type { INode, INodeExecutionData } from 'n8n-workflow';
 
 // ============================================================================
 // COLUMN DESCRIPTION HELPERS
@@ -302,4 +302,140 @@ export function replaceEmptyStringsByNulls(
 	});
 
 	return returnData;
+}
+
+export async function getTableSchema(
+  db: NeonDatabase,
+  schema: string,
+  table: string,
+): Promise<ColumnInfo[]> {
+  const query = `
+    SELECT
+      column_name,
+      data_type,
+      is_nullable,
+      udt_name,
+      column_default,
+      identity_generation,
+      is_generated
+    FROM information_schema.columns
+    WHERE table_schema = $1
+      AND table_name = $2
+  `;
+
+  const columns = await db.any(query, [schema, table]);
+  return columns;
+}
+
+export function hasJsonDataTypeInSchema(schema: ColumnInfo[]) {
+	return schema.some(({ data_type }) => data_type === 'json');
+}
+
+export function convertValuesToJson(
+	pgp: NeonClient,
+	schema: ColumnInfo[],
+	values: IDataObject,
+) {
+	schema
+		.filter(
+			({ data_type, column_name }) =>
+				data_type === 'json' && values[column_name] !== null && values[column_name] !== undefined,
+		)
+		.forEach(({ column_name }) => {
+			values[column_name] = pgp.as.json(values[column_name], true);
+		});
+
+	return values;
+}
+
+export const convertArraysToPostgresFormat = (
+	data: IDataObject,
+	schema: ColumnInfo[],
+	node: INode,
+	itemIndex = 0,
+) => {
+	for (const columnInfo of schema) {
+		//in case column type is array we need to convert it to fornmat that postgres understands
+		if (columnInfo.data_type.toUpperCase() === 'ARRAY') {
+			let columnValue = data[columnInfo.column_name];
+
+			if (typeof columnValue === 'string') {
+				columnValue = jsonParse(columnValue);
+			}
+
+			if (Array.isArray(columnValue)) {
+				const arrayEntries = columnValue.map((entry) => {
+					if (typeof entry === 'number') {
+						return entry;
+					}
+
+					if (typeof entry === 'boolean') {
+						entry = String(entry);
+					}
+
+					if (typeof entry === 'object') {
+						entry = JSON.stringify(entry);
+					}
+
+					if (typeof entry === 'string') {
+						return `"${entry.replace(/"/g, '\\"')}"`; //escape double quotes
+					}
+
+					return entry;
+				});
+
+				//wrap in {} instead of [] as postgres does and join with ,
+				data[columnInfo.column_name] = `{${arrayEntries.join(',')}}`;
+			} else {
+				if (columnInfo.is_nullable === 'NO') {
+					throw new NodeOperationError(
+						node,
+						`Column '${columnInfo.column_name}' has to be an array`,
+						{
+							itemIndex,
+						},
+					);
+				}
+			}
+		}
+	}
+};
+
+export function checkItemAgainstSchema(
+	node: INode,
+	item: IDataObject,
+	columnsInfo: ColumnInfo[],
+	index: number,
+) {
+	if (columnsInfo.length === 0) return item;
+	const schema = columnsInfo.reduce((acc, { column_name, data_type, is_nullable }) => {
+		acc[column_name] = { type: data_type.toUpperCase(), nullable: is_nullable === 'YES' };
+		return acc;
+	}, {} as IDataObject);
+
+	const keys = Object.keys(item);
+
+	for (const key of keys) {
+		if (schema[key] === undefined) {
+			throw new NodeOperationError(node, `Column '${key}' does not exist in selected table`, {
+				itemIndex: index,
+			});
+		}
+		if (item[key] === null && !(schema[key] as IDataObject)?.nullable) {
+			throw new NodeOperationError(node, `Column '${key}' is not nullable`, {
+				itemIndex: index,
+			});
+		}
+	}
+
+	return item;
+}
+
+export function convertValuesToObject(values: IDataObject[]) {
+	const item = values.reduce((acc, { column, value }) => {
+		acc[column as string] = value;
+		return acc;
+	}, {} as IDataObject);
+
+	return item;
 }
