@@ -1,4 +1,5 @@
 import type { INodeProperties } from 'n8n-workflow';
+import { QueryValues } from '../helpers/interface';
 
 export const optionsCollection: INodeProperties = {
 	displayName: 'Options',
@@ -62,7 +63,7 @@ export const optionsCollection: INodeProperties = {
 		},
 		{
 			displayName: 'Query Parameters',
-			name: 'queryReplacement',
+			name: 'queryParameters',
 			type: 'string',
 			default: '',
 			description:
@@ -86,7 +87,19 @@ export const optionsCollection: INodeProperties = {
 				},
 			},
 		},
-
+		{
+			displayName: 'Skip on Conflict',
+			name: 'skipOnConflict',
+			type: 'boolean',
+			default: false,
+			description:
+				'Whether to skip the row and do not throw error if a unique constraint or exclusion constraint is violated',
+			displayOptions: {
+				show: {
+					'/operation': ['insert'],
+				},
+			},
+		},
 	],
 };
 
@@ -101,6 +114,9 @@ export const schemaRLC: INodeProperties = {
 			displayName: 'From List',
 			name: 'list',
 			type: 'list',
+			typeOptions: {
+				searchListMethod: 'getSchemas',
+			}
 		},
 		{
 			displayName: 'Name',
@@ -118,7 +134,7 @@ export const schemaRLC: INodeProperties = {
 
 export const tableRLC: INodeProperties = {
 	displayName: 'Table',
-	name: 'tableId',
+	name: 'table',
 	type: 'resourceLocator',
 	default: { mode: 'list', value: '' },
 	description: 'The table to use',
@@ -127,6 +143,9 @@ export const tableRLC: INodeProperties = {
 			displayName: 'From List',
 			name: 'list',
 			type: 'list',
+			typeOptions: {
+				searchListMethod: 'getTables',
+			}
 		},
 		{
 			displayName: 'Name',
@@ -149,7 +168,7 @@ export const outputColumns: INodeProperties = {
 	description: 'Choose from the list, or specify IDs using an <a href="https://docs.n8n.io/code/expressions/" target="_blank">expression</a>. Choose from the list, or specify IDs using an <a href="https://docs.n8n.io/code/expressions/">expression</a>.',
 	typeOptions: {
 		loadOptionsMethod: 'getTableColumns',
-		loadOptionsDependsOn: ['schema.value', 'tableId.value'],
+		loadOptionsDependsOn: ['schema', 'table'],
 	},
 	default: [],
 };
@@ -178,7 +197,7 @@ export const whereFixedCollection: INodeProperties = {
 					placeholder: 'e.g. ID',
 					typeOptions: {
 						loadOptionsMethod: 'getTableColumns',
-						loadOptionsDependsOn: ['schema.value', 'tableId.value'],
+						loadOptionsDependsOn: ['schema', 'table'],
 					},
 				},
 				{
@@ -265,7 +284,7 @@ export const sortFixedCollection: INodeProperties = {
 					default: '',
 					typeOptions: {
 						loadOptionsMethod: 'getTableColumns',
-						loadOptionsDependsOn: ['schema.value', 'tableId.value'],
+						loadOptionsDependsOn: ['schema', 'table'],
 					},
 				},
 				{
@@ -309,3 +328,15 @@ export const combineConditionsCollection: INodeProperties = {
 	],
 	default: 'AND',
 };
+
+export function addReturning(
+	query: string,
+	outputColumns: string[],
+	replacements: QueryValues,
+): [string, QueryValues] {
+	if (outputColumns.includes('*')) return [`${query} RETURNING *`, replacements];
+
+	const replacementIndex = replacements.length + 1;
+
+	return [`${query} RETURNING $${replacementIndex}:name`, [...replacements, outputColumns]];
+}
