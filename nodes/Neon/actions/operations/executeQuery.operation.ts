@@ -8,7 +8,7 @@ import { NodeOperationError } from 'n8n-workflow';
 
 import { getResolvables, stringToArray, isJSON, mergeDisplayOptions, shouldContinueOnFail, replaceEmptyStringsByNulls } from '../../helpers/utils';
 import type { NeonDatabase, NeonNodeOptions, QueryWithValues } from '../../helpers/interface';
-import { optionsCollection } from '../commonDescription';
+import { optionsCollection } from '../common.description';
 
 const properties: INodeProperties[] = [
 	{
@@ -45,6 +45,17 @@ export async function execute(
 	nodeOptions: NeonNodeOptions,
 	_db?: NeonDatabase,
 ): Promise<INodeExecutionData[]> {
+	// Execute queries using the database connection passed from main node
+	const returnData: INodeExecutionData[] = [];
+	const db = (nodeOptions as any).db;
+
+	if (!db) {
+		throw new NodeOperationError(
+			this.getNode(),
+			'Database connection not provided to executeQuery operation'
+		);
+	}
+
 	const queries: QueryWithValues[] = replaceEmptyStringsByNulls(
 		items,
 		nodeOptions.replaceEmptyStrings || false,
@@ -59,15 +70,16 @@ export async function execute(
 		let values: Array<IDataObject | string> = [];
 
 		// Get query parameters
-		let queryReplacement = this.getNodeParameter('options.queryReplacement', index, '');
+		let queryParameter = nodeOptions.queryParameters;
 
-		if (typeof queryReplacement === 'number') {
-			queryReplacement = String(queryReplacement);
+		if (typeof queryParameter === 'number') {
+			queryParameter = String(queryParameter);
 		}
 
-		if (typeof queryReplacement === 'string') {
-			const node = this.getNode();
-			const rawReplacements = (node.parameters.options as IDataObject)?.queryReplacement as string;
+		if (typeof queryParameter === 'string') {
+			// const node = this.getNode();
+			// const rawReplacements = (node.parameters.options as IDataObject)?.query as string;
+			const rawReplacements = queryParameter
 
 			if (rawReplacements) {
 				const rawValues = rawReplacements.replace(/^=+/, '');
@@ -91,8 +103,8 @@ export async function execute(
 				}
 			}
 		} else {
-			if (Array.isArray(queryReplacement)) {
-				values = queryReplacement as IDataObject[];
+			if (Array.isArray(query)) {
+				values = query as IDataObject[];
 			} else {
 				throw new NodeOperationError(
 					this.getNode(),
@@ -103,7 +115,7 @@ export async function execute(
 		}
 
 		// Handle quoted literals (e.g., '$1' becomes $1) - simplified for Neon
-		if (!queryReplacement) {
+		if (!queryParameter) {
 			let nextValueIndex = values.length + 1;
 			const literals = query.match(/'\$[0-9]+'/g) ?? [];
 			for (const literal of literals) {
@@ -116,16 +128,6 @@ export async function execute(
 		return { query, values, options: { partial: true } };
 	});
 
-	// Execute queries using the database connection passed from main node
-	const returnData: INodeExecutionData[] = [];
-	const db = (nodeOptions as any).db;
-
-	if (!db) {
-		throw new NodeOperationError(
-			this.getNode(),
-			'Database connection not provided to executeQuery operation'
-		);
-	}
 
 	// Process each query
 	for (let i = 0; i < queries.length; i++) {

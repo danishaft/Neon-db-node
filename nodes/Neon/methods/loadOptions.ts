@@ -17,7 +17,7 @@ export async function getTableColumns(
 			extractValue: true,
 		}) as string;
 
-		const tableName = this.getNodeParameter('tableId', '', {
+		const tableName = this.getNodeParameter('table', '', {
 			extractValue: true,
 		}) as string;
 

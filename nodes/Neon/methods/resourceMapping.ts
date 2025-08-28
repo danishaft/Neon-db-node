@@ -15,7 +15,7 @@ export async function getMappingColumns(
 		extractValue: true,
 	}) as string;
 
-	const table = this.getNodeParameter('tableId', 0, {
+	const table = this.getNodeParameter('table', 0, {
 		extractValue: true,
 	}) as string;
 
