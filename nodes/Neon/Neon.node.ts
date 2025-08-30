@@ -109,16 +109,17 @@ export class Neon implements INodeType {
 				const result = await executeQueryOperation.call(this, items, { ...nodeOptions, db });
 				returnData.push(...result);
 			} else if (operation === 'select') {
-				// Use separated SELECT operation
-				try {
-					const { db } = await configureNeon(credentials);
 					const items = this.getInputData();
-					const nodeOptions = {};
+					const nodeOptions: NeonNodeOptions = {
+						queryMode: this.getNodeParameter('options.queryMode', 0, 'single') as any,
+						delayClosingIdleConnection: this.getNodeParameter('options.delayClosingIdleConnection', 0, 0) as number,
+						outputLargeFormatNumberAs: this.getNodeParameter('options.outputLargeFormatNumberAs', 0, 'string') as 'string' | 'number',
+						outputColumns: this.getNodeParameter('options.outputColumns', 0, []) as string[],
+					};
+
+					const { db } = await configureNeon(credentials, nodeOptions);
 					const result = await selectExecute.call(this, items, { ...nodeOptions, db } as any);
 					returnData.push(...result);
-				} catch (error) {
-					throw new NodeOperationError(this.getNode(), `SELECT operation failed: ${error.message}`);
-				}
 			} else if (operation === 'insert') {
 				// Use separated INSERT operation
 					const items = this.getInputData();
