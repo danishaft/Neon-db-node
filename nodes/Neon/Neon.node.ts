@@ -6,7 +6,7 @@ import type {
 } from 'n8n-workflow';
 import { NodeConnectionType, NodeOperationError } from 'n8n-workflow';
 import { configureNeon } from './transport';
-import type { NeonNodeCredentials } from './helpers/interface';
+import type { NeonNodeCredentials, NeonNodeOptions } from './helpers/interface';
 import { execute as executeQueryOperation } from './actions/operations/executeQuery.operation';
 import { execute as selectExecute } from './actions/operations/select.operation';
 import { execute as insertExecute } from './actions/operations/insert.operation';
@@ -94,7 +94,7 @@ export class Neon implements INodeType {
 			if (operation === 'executeQuery') {
 				// Use separated executeQuery operation
 				const items = this.getInputData();
-				const nodeOptions = {
+				const nodeOptions: NeonNodeOptions = {
 					queryMode: this.getNodeParameter('options.queryMode', 0, 'single') as any,
 					queryParameters: this.getNodeParameter('options.queryParameters', 0, '') as string,
 					delayClosingIdleConnection: this.getNodeParameter('options.delayClosingIdleConnection', 0, 0) as number,
@@ -122,8 +122,12 @@ export class Neon implements INodeType {
 			} else if (operation === 'insert') {
 				// Use separated INSERT operation
 					const items = this.getInputData();
-					const nodeOptions = {
+					const nodeOptions: NeonNodeOptions = {
+						queryMode: this.getNodeParameter('options.queryMode', 0, 'single') as any,
+						delayClosingIdleConnection: this.getNodeParameter('options.delayClosingIdleConnection', 0, 0) as number,
+						outputLargeFormatNumberAs: this.getNodeParameter('options.outputLargeFormatNumberAs', 0, 'string') as 'string' | 'number',
 						replaceEmptyStrings: this.getNodeParameter('options.replaceEmptyStrings', 0, false) as boolean,
+						skipOnConflict: this.getNodeParameter('options.skipOnConflict', 0, false) as boolean
 					};
 
 					const { db, client } = await configureNeon(credentials, nodeOptions);
