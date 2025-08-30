@@ -1,5 +1,5 @@
 import { jsonParse, NodeOperationError, type FieldType, type IDataObject, type IDisplayOptions, type INodeProperties } from 'n8n-workflow';
-import type { ColumnInfo, NeonClient, NeonDatabase } from './interface';
+import type { ColumnInfo, NeonClient, NeonDatabase, WhereClause } from './interface';
 import { neonFieldTypeMapping } from './interface';
 import { merge } from 'lodash';
 import type { INode, INodeExecutionData } from 'n8n-workflow';
@@ -96,102 +96,102 @@ export async function getEnumValues(db: any, enumType: string): Promise<string[]
 // ============================================================================
 
 /**
- * Builds WHERE clause from UI parameters
- * Converts the UI filter configuration to actual SQL WHERE clause
+ * Adds WHERE clauses to existing query
+ * Converts UI filter configuration to SQL WHERE clause with proper parameterization
  */
-export function buildWhereClause(whereParams: any, schema: string, table: string): { clause: string; values: any[] } {
-	if (!whereParams || !whereParams.values || whereParams.values.length === 0) {
-		return { clause: '', values: [] };
+export function addWhereClauses(
+	node: any,
+	itemIndex: number,
+	query: string,
+	clauses: WhereClause[],
+	replacements: any[],
+	combineConditions: string,
+): [string, any[]] {
+	if (!clauses || clauses.length === 0) return [query, replacements];
+
+	let combineWith = 'AND';
+	if (combineConditions === 'OR') {
+		combineWith = 'OR';
 	}
 
-	const conditions: string[] = [];
+	let replacementIndex = replacements.length + 1;
+	let whereQuery = ' WHERE';
 	const values: any[] = [];
-	let paramIndex = 1;
 
-	for (const condition of whereParams.values) {
-		const { column, condition: operator, value } = condition;
-
-		if (!column) continue;
-
-		switch (operator) {
-			case 'equal':
-				conditions.push(`${column} = $${paramIndex}`);
-				values.push(value);
-				paramIndex++;
-				break;
-			case '!=':
-				conditions.push(`${column} != $${paramIndex}`);
-				values.push(value);
-				paramIndex++;
-				break;
-			case 'LIKE':
-				conditions.push(`${column} LIKE $${paramIndex}`);
-				values.push(value);
-				paramIndex++;
-				break;
-			case '>':
-				conditions.push(`${column} > $${paramIndex}`);
-				values.push(value);
-				paramIndex++;
-				break;
-			case '<':
-				conditions.push(`${column} < $${paramIndex}`);
-				values.push(value);
-				paramIndex++;
-				break;
-			case '>=':
-				conditions.push(`${column} >= $${paramIndex}`);
-				values.push(value);
-				paramIndex++;
-				break;
-			case '<=':
-				conditions.push(`${column} <= $${paramIndex}`);
-				values.push(value);
-				paramIndex++;
-				break;
-			case 'IS NULL':
-				conditions.push(`${column} IS NULL`);
-				break;
-			case 'IS NOT NULL':
-				conditions.push(`${column} IS NOT NULL`);
-				break;
+	clauses.forEach((clause, index) => {
+		// Normalize operator names
+		if (clause.condition === 'equal') {
+			clause.condition = '=';
 		}
-	}
 
-	if (conditions.length === 0) {
-		return { clause: '', values: [] };
-	}
+		// Validate numeric values for comparison operators
+		if (['>', '<', '>=', '<='].includes(clause.condition)) {
+			const value = Number(clause.value);
+			if (Number.isNaN(value)) {
+				throw new NodeOperationError(
+					node,
+					`Operator in entry ${index + 1} of 'Select Rows' works with numbers, but value ${
+						clause.value
+					} is not a number`,
+					{
+						itemIndex,
+					},
+				);
+			}
+			clause.value = value;
+		}
 
-	const combineOperator = whereParams.combineConditions || 'AND';
-	const clause = `WHERE ${conditions.join(` ${combineOperator} `)}`;
+		// Parameterize column names for security
+		const columnReplacement = `$${replacementIndex}:name`;
+		values.push(clause.column);
+		replacementIndex = replacementIndex + 1;
 
-	return { clause, values };
+		// Parameterize values (skip for NULL checks)
+		let valueReplacement = '';
+		if (clause.condition !== 'IS NULL' && clause.condition !== 'IS NOT NULL') {
+			valueReplacement = ` $${replacementIndex}`;
+			values.push(clause.value);
+			replacementIndex = replacementIndex + 1;
+		}
+
+		// Add operator between conditions (no trailing operator)
+		const operator = index === clauses.length - 1 ? '' : ` ${combineWith}`;
+
+		whereQuery += ` ${columnReplacement} ${clause.condition}${valueReplacement}${operator}`;
+	});
+
+	return [`${query}${whereQuery}`, replacements.concat(...values)];
 }
 
 /**
- * Builds ORDER BY clause from UI parameters
- * Converts the UI sort configuration to actual SQL ORDER BY clause
+ * Builds ORDER BY rules from UI parameters
+ * Converts the UI sort configuration to actual SQL ORDER BY rules
+ * Returns both the clause and parameter values for secure execution
  */
-export function buildSortClause(sortParams: any): string {
-	if (!sortParams || !sortParams.values || sortParams.values.length === 0) {
-		return '';
+export function addSortRules(
+	query: string,
+	rules: any,
+	replacements: any[],
+): [string, any[]] {
+	if (!rules || !rules.values || rules.values.length === 0) return [query, replacements];
+
+	let replacementIndex = replacements.length + 1;
+	let orderByQuery = ' ORDER BY';
+	const values: string[] = [];
+
+	for (let index = 0; index < rules.values.length; index++) {
+		const rule = rules.values[index];
+		const columnReplacement = `$${replacementIndex}:name`;
+		values.push(rule.column);
+		replacementIndex = replacementIndex + 1;
+
+		const endWith = index === rules.values.length - 1 ? '' : ',';
+		const sortDirection = rule.direction === 'DESC' ? 'DESC' : 'ASC';
+
+		orderByQuery += ` ${columnReplacement} ${sortDirection}${endWith}`;
 	}
 
-	const orders: string[] = [];
-
-	for (const sort of sortParams.values) {
-		const { column, direction } = sort;
-
-		if (!column) continue;
-
-		orders.push(`${column} ${direction || 'ASC'}`);
-	}
-
-	if (orders.length === 0) {
-		return '';
-	}
-
-	return `ORDER BY ${orders.join(', ')}`;
+	return [`${query}${orderByQuery}`, replacements.concat(...values)];
 }
 
 /**
