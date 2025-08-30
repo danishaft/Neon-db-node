@@ -16,6 +16,22 @@ export const optionsCollection: INodeProperties = {
 			description: 'Number of seconds to wait before idle connection would be eligible for closing',
 		},
 		{
+			displayName: 'Output Column Names or IDs',
+			name: 'outputColumns',
+			type: 'multiOptions',
+			description: 'Choose from the list, or specify IDs using an <a href="https://docs.n8n.io/code/expressions/" target="_blank">expression</a>. Choose from the list, or specify IDs using an <a href="https://docs.n8n.io/code/expressions/">expression</a>.',
+			typeOptions: {
+				loadOptionsMethod: 'getTableColumns',
+				loadOptionsDependsOn: ['schema', 'table'],
+			},
+			default: [],
+			displayOptions: {
+				show: {
+					'/operation': ['select'],
+				},
+			},
+		},
+		{
 			displayName: 'Output Large-Format Number As',
 			name: 'outputLargeFormatNumberAs',
 			type: 'options',
@@ -161,17 +177,6 @@ export const tableRLC: INodeProperties = {
 	},
 };
 
-export const outputColumns: INodeProperties = {
-	displayName: 'Output Column Names or IDs',
-	name: 'outputColumns',
-	type: 'multiOptions',
-	description: 'Choose from the list, or specify IDs using an <a href="https://docs.n8n.io/code/expressions/" target="_blank">expression</a>. Choose from the list, or specify IDs using an <a href="https://docs.n8n.io/code/expressions/">expression</a>.',
-	typeOptions: {
-		loadOptionsMethod: 'getTableColumns',
-		loadOptionsDependsOn: ['schema', 'table'],
-	},
-	default: [],
-};
 
 export const whereFixedCollection: INodeProperties = {
 	displayName: 'Select Rows',
@@ -250,11 +255,11 @@ export const whereFixedCollection: INodeProperties = {
 					displayName: 'Value',
 					name: 'value',
 					type: 'string',
-					// displayOptions: {
-					// 	hide: {
-					// 		condition: ['IS NULL', 'IS NOT NULL'],
-					// 	},
-					// },
+					displayOptions: {
+						hide: {
+							condition: ['IS NULL', 'IS NOT NULL'],
+						},
+					},
 					default: '',
 				},
 			],

@@ -208,6 +208,9 @@ export type NeonNodeOptions = {
 	/** How to handle large numbers (string vs number) */
 	outputLargeFormatNumberAs?: 'string' | 'number';
 
+	/** Output columns */
+	outputColumns?: string[];
+
 	/** Whether to replace empty strings with NULL values */
 	replaceEmptyStrings?: boolean;
 
