@@ -31,6 +31,12 @@ const properties: INodeProperties[] = [
 		default: 'autoMapInputData',
 		description:
 			'Whether to map node input properties and the table data automatically or manually',
+		displayOptions: {
+			show: {
+				resource: ['row'],
+				operation: ['insert'],
+			},
+		},
 	},
 	{
 		displayName: 'Values to Send',
