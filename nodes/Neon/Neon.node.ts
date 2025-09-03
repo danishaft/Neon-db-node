@@ -137,15 +137,18 @@ export class Neon implements INodeType {
 					returnData.push(...result);
 			} else if (operation === 'update') {
 				// Use separated UPDATE operation
-				try {
-					const { db } = await configureNeon(credentials);
 					const items = this.getInputData();
-					const nodeOptions = {};
+					const nodeOptions = {
+						queryMode: this.getNodeParameter('options.queryMode', 0, 'single') as any,
+						delayClosingIdleConnection: this.getNodeParameter('options.delayClosingIdleConnection', 0, 0) as number,
+						outputLargeFormatNumberAs: this.getNodeParameter('options.outputLargeFormatNumberAs', 0, 'string') as 'string' | 'number',
+						replaceEmptyStrings: this.getNodeParameter('options.replaceEmptyStrings', 0, false) as boolean,
+					};
+
+					const { db } = await configureNeon(credentials);
+
 					const result = await updateExecute.call(this, items, { ...nodeOptions, db } as any);
 					returnData.push(...result);
-				} catch (error) {
-					throw new NodeOperationError(this.getNode(), `UPDATE operation failed: ${error.message}`);
-				}
 			} else if (operation === 'delete') {
 				// Use separated DELETE operation
 				try {
