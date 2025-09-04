@@ -193,6 +193,8 @@ export type QueriesRunner = (
  * Simplified from the full Postgres node options to focus on Neon-specific needs
  */
 export type NeonNodeOptions = {
+	/** Whether to cascade the delete */
+	cascade?: boolean;
 	/** The operation to perform (insert, select, executeQuery, delete, update, insertOrUpdate) */
 	operation?: string;
 

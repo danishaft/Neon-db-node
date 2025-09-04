@@ -1,26 +1,78 @@
 import type {
+	IDataObject,
 	IExecuteFunctions,
 	INodeExecutionData,
 	INodeProperties,
 } from 'n8n-workflow';
 import { NodeOperationError } from 'n8n-workflow';
 
-import { buildWhereClause, mergeDisplayOptions } from '../../helpers/utils';
-import type { NeonDatabase, NeonNodeOptions } from '../../helpers/interface';
-import { schemaRLC, tableRLC, whereFixedCollection } from '../commonDescription';
+import { addWhereClauses, mergeDisplayOptions} from '../../helpers/utils';
+import type { NeonDatabase, NeonNodeOptions, QueryValues, QueryWithValues, WhereClause } from '../../helpers/interface';
+import { combineConditionsCollection, optionsCollection, whereFixedCollection } from '../common.description';
 
 const properties: INodeProperties[] = [
-	// Schema and table selection (imported from commonDescription)
-	schemaRLC,
-	tableRLC,
-	// WHERE clause builder (imported from commonDescription)
-	whereFixedCollection,
+	{
+		displayName: 'Command',
+		name: 'deleteCommand',
+		type: 'options',
+		default: 'truncate',
+		options: [
+			{
+				name: 'Delete Rows',
+				value: 'delete',
+				description:
+					"Delete the rows that match the 'Select Rows' conditions below. If no selection is made, all rows in the table are deleted.",
+			},
+			{
+				name: 'Truncate Table',
+				value: 'truncate',
+				description: "Only removes the table's data and preserves the table's structure",
+			},
+			{
+				name: 'Drop Table',
+				value: 'drop',
+				description: "Deletes the table's data and also the table's structure permanently",
+			},
+		],
+	},
+	{
+		displayName: 'Restart Sequences',
+		name: 'restartSequences',
+		type: 'boolean',
+		default: false,
+		description: 'Whether to reset identity (auto-increment) columns to their initial values',
+		displayOptions: {
+			show: {
+				deleteCommand: ['truncate'],
+			},
+		},
+	},
+	{
+		...whereFixedCollection,
+		displayOptions: {
+			show: {
+				deleteCommand: ['delete'],
+			},
+		},
+	},
+	{
+		...combineConditionsCollection,
+		displayOptions: {
+			show: {
+				deleteCommand: ['delete'],
+			},
+		},
+	},
+	optionsCollection
 ];
 
 const displayOptions = {
 	show: {
 		resource: ['row'],
 		operation: ['delete'],
+	},
+	hide: {
+		table: [''],
 	},
 };
 
@@ -42,36 +94,104 @@ export async function execute(
 		);
 	}
 
-	try {
-		// Get parameters
-		const schema = this.getNodeParameter('schema', 0, { extractValue: true }) as string;
-		const table = this.getNodeParameter('tableId', 0, { extractValue: true }) as string;
-		const whereParams = this.getNodeParameter('where', 0) as any;
+	const queries: QueryWithValues[] = [];
 
-		if (!schema || !table) {
-			throw new NodeOperationError(this.getNode(), 'Schema and table are required for DELETE operations');
+	// Get schema and table from node parameters
+	const schema = this.getNodeParameter('schema', 0, undefined, {
+		extractValue: true,
+	}) as string;
+
+	const table = this.getNodeParameter('table', 0, undefined, {
+		extractValue: true,
+	}) as string;
+
+	for (let i = 0; i < items.length; i++) {
+		const deleteCommand = this.getNodeParameter('deleteCommand', i) as string;
+
+		let query = '';
+		let values: QueryValues = [schema, table];
+
+		if (deleteCommand === 'drop') {
+			const cascade = nodeOptions.cascade ? ' CASCADE' : '';
+			query = `DROP TABLE IF EXISTS $1:name.$2:name${cascade}`;
 		}
 
-		// Build DELETE query
-		const { clause: whereClause, values: whereValues } = buildWhereClause(whereParams, schema, table);
-
-		if (!whereClause) {
-			throw new NodeOperationError(this.getNode(), 'WHERE clause is required for DELETE operations');
+		if (deleteCommand === 'truncate') {
+			const restartSequences = this.getNodeParameter('restartSequences', i, false) as boolean;
+			const identity = restartSequences ? ' RESTART IDENTITY' : '';
+			const cascade = nodeOptions.cascade ? ' CASCADE' : '';
+			query = `TRUNCATE TABLE $1:name.$2:name${identity}${cascade}`;
 		}
 
-		const query = `DELETE FROM ${schema}.${table} ${whereClause} RETURNING *`;
+		if (deleteCommand === 'delete') {
+			// Add combine conditions clause if specified
+			const combineConditions = this.getNodeParameter('combineConditions', i, 'AND') as string;
+			const whereClauses =
+			((this.getNodeParameter('where', i, []) as IDataObject).values as WhereClause[]) || [];
 
-		// Execute DELETE
-		const result = await db.any(query, whereValues);
+			[query, values] = addWhereClauses(
+				this.getNode(),
+				i,
+				'DELETE FROM $1:name.$2:name',
+				whereClauses,
+				values,
+				combineConditions,
+			);
 
-		for (const row of result) {
-			returnData.push({
-				json: row,
-			});
+			if(query === '') {
+				throw new NodeOperationError(
+					this.getNode(),
+					'Invalid delete command, only drop, delete and truncate are supported',
+					{ itemIndex: i }
+				);
+			}
 		}
 
-	} catch (error) {
-		throw new NodeOperationError(this.getNode(), `DELETE operation failed: ${error.message}`);
+		if (query === '') {
+			throw new NodeOperationError(
+				this.getNode(),
+				'Invalid delete command, only drop, delete and truncate are supported',
+				{ itemIndex: i }
+			);
+		}
+
+		// Add RETURNING clause for DELETE operations to show what was deleted
+		if (deleteCommand === 'delete') {
+			query += ' RETURNING *';
+		}
+
+		queries.push({ query, values });
+	}
+
+	// Execute all queries
+	for (let i = 0; i < queries.length; i++) {
+		const { query, values } = queries[i];
+		const executionMode = nodeOptions.queryMode || 'single';
+		const continueOnFail = executionMode === 'independently';
+		let result;
+
+			if (executionMode === 'transaction') {
+				result = await db.tx(async (t: any) => {
+					return await t.any(query, values);
+				});
+			} else if (executionMode === 'independently') {
+				try {
+					result = await db.any(query, values);
+				} catch (error) {
+					if (!continueOnFail) {
+						throw error;
+					}
+					console.warn(`Query failed but continuing due to continueOnFail: ${error.message}`);
+					result = []; // Empty result for failed query
+				}
+			} else {
+				result = await db.any(query, values); // Single query mode
+			}
+
+			// Add results to return data
+			for (const row of result) {
+				returnData.push({ json: row });
+			}
 	}
 
 	return returnData;

@@ -9,6 +9,22 @@ export const optionsCollection: INodeProperties = {
 	default: {},
 	options: [
 		{
+			displayName: 'Cascade',
+			name: 'cascade',
+			type: 'boolean',
+			default: false,
+			description:
+				'Whether to drop all objects that depend on the table, such as views and sequences',
+			displayOptions: {
+				show: {
+					'/operation': ['delete'],
+				},
+				hide: {
+					'/deleteCommand': ['delete'],
+				},
+			},
+		},
+		{
 			displayName: 'Delay Closing Idle Connection',
 			name: 'delayClosingIdleConnection',
 			type: 'number',
