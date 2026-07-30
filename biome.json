@@ -1,0 +1,18 @@
+{
+	"$schema": "https://biomejs.dev/schemas/2.5.6/schema.json",
+	"files": {
+		"includes": ["credentials/**/*.ts", "nodes/**/*.ts", "test/**/*.ts", "*.ts"]
+	},
+	"formatter": {
+		"enabled": true,
+		"indentStyle": "tab",
+		"lineWidth": 100
+	},
+	"javascript": {
+		"formatter": {
+			"quoteStyle": "single",
+			"semicolons": "always",
+			"trailingCommas": "all"
+		}
+	}
+}

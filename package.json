@@ -1,40 +1,41 @@
 {
   "name": "n8n-nodes-neon",
   "version": "0.1.0",
-  "description": "n8n node to connect to Neon Postgres database.",
+  "description": "Use Neon Postgres databases in n8n workflows.",
   "keywords": [
     "n8n-community-node-package"
   ],
   "license": "MIT",
-  "homepage": "https://n8n.io",
+  "homepage": "https://github.com/danishaft/Neon-db-node#readme",
   "author": {
-    "name": "Test",
-    "email": "test@example.com"
+    "name": "danishaft",
+    "email": "danielejeh2019@gmail.com"
   },
   "repository": {
     "type": "git",
     "url": "https://github.com/danishaft/Neon-db-node"
   },
   "engines": {
-    "node": ">=20.15"
+    "node": ">=22"
   },
   "main": "index.js",
   "scripts": {
-    "build": "npx rimraf dist && tsc && gulp build:icons",
-    "dev": "tsc --watch",
-    "format": "prettier nodes credentials --write",
-    "lint": "eslint nodes credentials package.json",
-    "lintfix": "eslint nodes credentials package.json --fix",
-    "prepublishOnly": "npm run build && npm run lint -c .eslintrc.prepublish.js nodes credentials package.json",
-    "test": "jest",
-    "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
+    "build": "n8n-node build",
+    "dev": "n8n-node dev",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
+    "lint": "n8n-node lint",
+    "lint:fix": "n8n-node lint --fix",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "n8n-node prerelease"
   },
   "files": [
     "dist"
   ],
   "n8n": {
     "n8nNodesApiVersion": 1,
+    "strict": false,
     "credentials": [
       "dist/credentials/NeonApi.credentials.js"
     ],
@@ -43,24 +44,15 @@
     ]
   },
   "devDependencies": {
-    "@types/jest": "^30.0.0",
-    "@types/lodash": "^4.14.202",
-    "@types/pg": "^8.11.0",
-    "@types/uuid": "^9.0.7",
-    "@typescript-eslint/parser": "~8.32.0",
-    "eslint": "^8.57.0",
-    "eslint-plugin-n8n-nodes-base": "^1.16.3",
-    "gulp": "^5.0.0",
-    "jest": "^30.0.5",
-    "prettier": "^3.5.3",
-    "ts-jest": "^29.4.1",
-    "typescript": "^5.8.2"
+    "@biomejs/biome": "2.5.6",
+    "@n8n/node-cli": "0.41.2",
+    "eslint": "9.39.4",
+    "prettier": "3.9.6",
+    "typescript": "5.9.3",
+    "vitest": "4.1.10"
   },
   "dependencies": {
-    "lodash": "^4.17.21",
-    "pg": "^8.11.3",
-    "pg-promise": "^11.6.0",
-    "uuid": "^9.0.1"
+    "pg-promise": "12.7.0"
   },
   "peerDependencies": {
     "n8n-workflow": "*"
