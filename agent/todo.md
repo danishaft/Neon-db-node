@@ -1,16 +1,11 @@
 # @TODOS
 
-## Direction
+The node now has focused contract tests and a live local n8n/PostgreSQL run.
+Only external compatibility and release work remains.
 
-- Keep the n8n community node in TypeScript.
-- Do not rewrite it in Go or add standalone cloud infrastructure.
-
-## Work
-
-- [ ] Add unit tests for node parameters, operation routing, and returned data shapes.
-- [ ] Add integration tests against a controlled Neon project for connection, query, transaction, and failure paths.
-- [ ] Test supported n8n and Node.js versions with a focused compatibility matrix.
-- [ ] Redact credentials, connection strings, and query secrets from errors and logs.
-- [ ] Add GitHub Actions for Biome, type checking, tests, package validation, and security checks.
-- [ ] Automate npm publishing with provenance and version verification.
-- [ ] Document supported Neon operations, permissions, limits, and troubleshooting steps.
+- [ ] Run credential test, parameterized query, transaction rollback, and
+      independent failure against a disposable current Neon Cloud project.
+- [ ] Verify the published package in the oldest supported self-hosted n8n
+      release before documenting a minimum n8n version.
+- [ ] Add npm provenance and verify a clean install from the packed artifact.
+- [ ] Add secret scanning to CI before accepting external contributions.
