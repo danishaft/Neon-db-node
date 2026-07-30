@@ -25,18 +25,11 @@ export const optionsCollection: INodeProperties = {
 			},
 		},
 		{
-			displayName: 'Delay Closing Idle Connection',
-			name: 'delayClosingIdleConnection',
-			type: 'number',
-			default: 0,
-			description: 'Number of seconds to wait before idle connection would be eligible for closing',
-		},
-		{
 			displayName: 'Output Column Names or IDs',
 			name: 'outputColumns',
 			type: 'multiOptions',
 			description:
-				'Choose from the list, or specify IDs using an <a href="https://docs.n8n.io/code/expressions/" target="_blank">expression</a>. Choose from the list, or specify IDs using an <a href="https://docs.n8n.io/code/expressions/">expression</a>.',
+				'Choose from the list, or specify IDs using an <a href="https://docs.n8n.io/code/expressions/">expression</a>',
 			typeOptions: {
 				loadOptionsMethod: 'getTableColumns',
 				loadOptionsDependsOn: ['schema', 'table'],
@@ -47,26 +40,6 @@ export const optionsCollection: INodeProperties = {
 					'/operation': ['select'],
 				},
 			},
-		},
-		{
-			displayName: 'Output Large-Format Number As',
-			name: 'outputLargeFormatNumberAs',
-			type: 'options',
-			noDataExpression: true,
-			options: [
-				{
-					name: 'String',
-					value: 'string',
-					description: 'Convert large numbers to strings to prevent data loss',
-				},
-				{
-					name: 'Number',
-					value: 'number',
-					description: 'Keep as numbers (may lose precision for very large values)',
-				},
-			],
-			default: 'string',
-			description: 'How to handle PostgreSQL BIGINT/NUMERIC types that exceed JavaScript limits',
 		},
 		{
 			displayName: 'Query Mode',

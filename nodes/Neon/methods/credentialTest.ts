@@ -11,7 +11,6 @@ export async function neonApiCredentialTest(
 	credential: ICredentialsDecrypted,
 ): Promise<INodeCredentialTestResult> {
 	try {
-		// Convert credential data to our interface format
 		if (!credential.data) {
 			return {
 				status: 'Error',
@@ -28,24 +27,16 @@ export async function neonApiCredentialTest(
 			ssl: credential.data.ssl as 'require' | 'allow',
 		};
 
-		// Test the connection using our helper function
 		const result = await validateNeonCredentials(credentials);
 
-		if (result.success) {
-			return {
-				status: 'OK',
-				message: result.message,
-			};
-		} else {
-			return {
-				status: 'Error',
-				message: result.message,
-			};
-		}
-	} catch (error) {
+		return {
+			status: result.success ? 'OK' : 'Error',
+			message: result.message,
+		};
+	} catch {
 		return {
 			status: 'Error',
-			message: `Connection test failed: ${error.message}`,
+			message: 'Connection test failed.',
 		};
 	}
 }

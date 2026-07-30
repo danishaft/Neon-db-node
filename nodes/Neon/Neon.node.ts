@@ -41,17 +41,7 @@ function isOperation(value: string): value is Operation {
 function getNodeOptions(context: IExecuteFunctions): NeonNodeOptions {
 	return {
 		cascade: context.getNodeParameter('options.cascade', 0, false) as boolean,
-		delayClosingIdleConnection: context.getNodeParameter(
-			'options.delayClosingIdleConnection',
-			0,
-			0,
-		) as number,
 		outputColumns: context.getNodeParameter('options.outputColumns', 0, []) as string[],
-		outputLargeFormatNumberAs: context.getNodeParameter(
-			'options.outputLargeFormatNumberAs',
-			0,
-			'string',
-		) as 'number' | 'string',
 		queryMode: context.getNodeParameter('options.queryMode', 0, 'single') as QueryMode,
 		queryParameters: context.getNodeParameter('options.queryParameters', 0, '') as string,
 		replaceEmptyStrings: context.getNodeParameter(
@@ -136,7 +126,7 @@ export class Neon implements INodeType {
 
 		const credentials = await this.getCredentials<NeonNodeCredentials>('neonApi');
 		const options = getNodeOptions(this);
-		const connection = await configureNeon(credentials, options);
+		const connection = await configureNeon(credentials);
 
 		try {
 			const result = await operationExecutors[operation].call(this, this.getInputData(), {

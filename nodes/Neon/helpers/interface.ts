@@ -195,12 +195,6 @@ export type NeonNodeOptions = {
 	/** Query parameters */
 	queryParameters?: string | number | string[] | number[];
 
-	/** Delay closing idle connection in seconds */
-	delayClosingIdleConnection?: number;
-
-	/** How to handle large numbers (string vs number) */
-	outputLargeFormatNumberAs?: 'string' | 'number';
-
 	/** Output columns */
 	outputColumns?: string[];
 

@@ -2,7 +2,6 @@ import type {
 	NeonConnectionData,
 	NeonConnectionParameters,
 	NeonNodeCredentials,
-	NeonNodeOptions,
 } from '../helpers/interface';
 import pgPromise from 'pg-promise';
 import { getErrorCode } from '../helpers/errors';
@@ -14,10 +13,7 @@ import { getErrorCode } from '../helpers/errors';
 /**
  * Builds connection configuration for Neon database
  */
-export function buildNeonConfig(
-	credentials: NeonNodeCredentials,
-	options?: NeonNodeOptions,
-): NeonConnectionParameters {
+export function buildNeonConfig(credentials: NeonNodeCredentials): NeonConnectionParameters {
 	return {
 		host: credentials.host,
 		port: credentials.port,
@@ -27,9 +23,8 @@ export function buildNeonConfig(
 		ssl: credentials.ssl === 'require' ? true : false,
 
 		keepAlive: true,
-		max: 5, // Max connections in pool
-		connectionTimeoutMillis: 30000, // 30 seconds connection timeout
-		keepAliveInitialDelayMillis: (options?.delayClosingIdleConnection || 0) * 1000, // Convert seconds to milliseconds
+		max: 5,
+		connectionTimeoutMillis: 30000,
 	};
 }
 
@@ -41,24 +36,9 @@ export function buildNeonConfig(
  * Sets up Neon database connection
 
  */
-export async function configureNeon(
-	credentials: NeonNodeCredentials,
-	options?: NeonNodeOptions,
-): Promise<NeonConnectionData> {
-	const connectionParams = buildNeonConfig(credentials, options);
+export async function configureNeon(credentials: NeonNodeCredentials): Promise<NeonConnectionData> {
+	const connectionParams = buildNeonConfig(credentials);
 	const pgp = pgPromise();
-
-	// Configure type parsers for large numbers if option is set to 'number'
-	if (options?.outputLargeFormatNumberAs === 'number') {
-		// Configure pg-promise to parse BIGINT (type 20) and NUMERIC (type 1700) as JavaScript numbers
-		// Type 20 = BIGINT, Type 1700 = NUMERIC/DECIMAL
-		pgp.pg.types.setTypeParser(20, (value: string) => {
-			return parseInt(value, 10);
-		});
-		pgp.pg.types.setTypeParser(1700, (value: string) => {
-			return parseFloat(value);
-		});
-	}
 
 	const db = pgp(connectionParams);
 
@@ -73,9 +53,8 @@ export async function configureNeon(
 export async function withNeonDatabase<T>(
 	credentials: NeonNodeCredentials,
 	operation: (db: NeonConnectionData['db']) => Promise<T>,
-	options?: NeonNodeOptions,
 ): Promise<T> {
-	const connection = await configureNeon(credentials, options);
+	const connection = await configureNeon(credentials);
 	try {
 		return await operation(connection.db);
 	} finally {
@@ -94,8 +73,7 @@ export async function validateNeonCredentials(
 	credentials: NeonNodeCredentials,
 ): Promise<{ success: boolean; message: string }> {
 	try {
-		const { db } = await configureNeon(credentials);
-		await db.one('SELECT 1 as test'); // Simple test query
+		await withNeonDatabase(credentials, (db) => db.one('SELECT 1 AS test'));
 		return { success: true, message: 'Connection successful!' };
 	} catch (error) {
 		return { success: false, message: getConnectionErrorMessage(error) };
