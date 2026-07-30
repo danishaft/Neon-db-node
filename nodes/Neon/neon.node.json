@@ -1,17 +1,17 @@
 {
-	"node": "n8n-nodes-base.neon",
+	"node": "n8n-nodes-neon",
 	"nodeVersion": "1.0",
 	"codexVersion": "1.0",
 	"categories": ["Database & Cloud"],
 	"resources": {
 		"credentialDocumentation": [
 			{
-				"url": "https://docs.n8n.io/integrations/builtin/credentials/supabase/"
+				"url": "https://github.com/danishaft/Neon-db-node#credentials"
 			}
 		],
 		"primaryDocumentation": [
 			{
-				"url": "https://docs.n8n.io/integrations/builtin/app-nodes/n8n-nodes-base.supabase/"
+				"url": "https://github.com/danishaft/Neon-db-node#operations"
 			}
 		]
 	}

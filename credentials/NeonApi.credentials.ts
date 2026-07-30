@@ -1,21 +1,22 @@
-import {
-	ICredentialType,
-	INodeProperties,
-} from 'n8n-workflow';
+import type { Icon, ICredentialType, INodeProperties } from 'n8n-workflow';
 
 export class NeonApi implements ICredentialType {
 	name = 'neonApi';
-	displayName = 'Neon Database API';
-	documentationUrl = 'https://docs.n8n.io/integrations/creating-nodes/build/declarative-style-node/';
+	displayName = 'Neon Postgres API';
+	icon: Icon = {
+		light: 'file:../nodes/Neon/neon.svg',
+		dark: 'file:../nodes/Neon/neon.dark.svg',
+	};
+	documentationUrl = 'https://neon.com/docs/connect/connect-from-any-app';
 
 	properties: INodeProperties[] = [
 		{
 			displayName: 'Host',
 			name: 'host',
 			type: 'string',
-			default: 'ep-delicate-grass-ddgx46j3-pooler.c-2.us-east-1.aws.neon.tech',
-			description: 'Your Neon database host (found in Project Settings > Connection Details)',
-			placeholder: 'ep-delicate-grass-ddgx46j3-pooler.c-2.us-east-1.aws.neon.tech',
+			default: '',
+			description: 'Neon host from the project connection details',
+			placeholder: 'ep-example-pooler.us-east-2.aws.neon.tech',
 		},
 		{
 			displayName: 'Database',
@@ -38,7 +39,7 @@ export class NeonApi implements ICredentialType {
 			name: 'password',
 			type: 'string',
 			typeOptions: { password: true },
-			default: '={{ $env.NEON_PASSWORD }}',
+			default: '',
 			description: 'Your Neon database password',
 		},
 		{
@@ -64,12 +65,11 @@ export class NeonApi implements ICredentialType {
 				{
 					name: 'Allow',
 					value: 'allow',
-					description: 'Allow connections without a valid certificate (not recommended).'
-				}
+					description: 'Allow an unencrypted connection for local development',
+				},
 			],
 			default: 'require',
-			description: 'Neon requires SSL for all connections. `Require` is the recommended setting.',
+			description: 'Whether the database connection must use SSL',
 		},
 	];
-
 }

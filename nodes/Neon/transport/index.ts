@@ -1,5 +1,11 @@
-import type { NeonNodeCredentials, NeonConnectionsData, NeonConnectionParameters, NeonNodeOptions } from '../helpers/interface';
+import type {
+	NeonConnectionData,
+	NeonConnectionParameters,
+	NeonNodeCredentials,
+	NeonNodeOptions,
+} from '../helpers/interface';
 import pgPromise from 'pg-promise';
+import { getErrorCode } from '../helpers/errors';
 
 // ============================================================================
 // CONNECTION CONFIGURATION
@@ -8,7 +14,10 @@ import pgPromise from 'pg-promise';
 /**
  * Builds connection configuration for Neon database
  */
-export function buildNeonConfig(credentials: NeonNodeCredentials, options?: NeonNodeOptions): NeonConnectionParameters {
+export function buildNeonConfig(
+	credentials: NeonNodeCredentials,
+	options?: NeonNodeOptions,
+): NeonConnectionParameters {
 	return {
 		host: credentials.host,
 		port: credentials.port,
@@ -18,8 +27,8 @@ export function buildNeonConfig(credentials: NeonNodeCredentials, options?: Neon
 		ssl: credentials.ssl === 'require' ? true : false,
 
 		keepAlive: true,
-		max: 5,                          // Max connections in pool
-		connectionTimeoutMillis: 30000,  // 30 seconds connection timeout
+		max: 5, // Max connections in pool
+		connectionTimeoutMillis: 30000, // 30 seconds connection timeout
 		keepAliveInitialDelayMillis: (options?.delayClosingIdleConnection || 0) * 1000, // Convert seconds to milliseconds
 	};
 }
@@ -32,19 +41,10 @@ export function buildNeonConfig(credentials: NeonNodeCredentials, options?: Neon
  * Sets up Neon database connection
 
  */
-// Connection pool for reuse within the same node execution
-let connectionPool: NeonConnectionsData | null = null;
-
 export async function configureNeon(
 	credentials: NeonNodeCredentials,
 	options?: NeonNodeOptions,
-): Promise<NeonConnectionsData> {
-	// Reuse existing connection if available and not ended
-	if (connectionPool && !connectionPool.db.$pool.ended) {
-		return connectionPool;
-	}
-
-	// Create new connection with pooling settings
+): Promise<NeonConnectionData> {
 	const connectionParams = buildNeonConfig(credentials, options);
 	const pgp = pgPromise();
 
@@ -62,9 +62,25 @@ export async function configureNeon(
 
 	const db = pgp(connectionParams);
 
-	// Store in pool for reuse
-	connectionPool = { db, client: pgp };
-	return connectionPool;
+	return {
+		db,
+		close: async () => {
+			pgp.end();
+		},
+	};
+}
+
+export async function withNeonDatabase<T>(
+	credentials: NeonNodeCredentials,
+	operation: (db: NeonConnectionData['db']) => Promise<T>,
+	options?: NeonNodeOptions,
+): Promise<T> {
+	const connection = await configureNeon(credentials, options);
+	try {
+		return await operation(connection.db);
+	} finally {
+		await connection.close();
+	}
 }
 
 // ============================================================================
@@ -79,7 +95,7 @@ export async function validateNeonCredentials(
 ): Promise<{ success: boolean; message: string }> {
 	try {
 		const { db } = await configureNeon(credentials);
-		await db.one('SELECT 1 as test');  // Simple test query
+		await db.one('SELECT 1 as test'); // Simple test query
 		return { success: true, message: 'Connection successful!' };
 	} catch (error) {
 		return { success: false, message: getConnectionErrorMessage(error) };
@@ -94,9 +110,8 @@ export async function validateNeonCredentials(
  * Converts database errors into user-friendly messages
  * Helps users understand what went wrong with their connection
  */
-export function getConnectionErrorMessage(error: any): string {
-	const errorCode = error.code;
-	const errorMessage = error.message || 'Unknown error occurred';
+export function getConnectionErrorMessage(error: unknown): string {
+	const errorCode = getErrorCode(error);
 
 	// Handle common PostgreSQL error codes
 	switch (errorCode) {
@@ -125,7 +140,6 @@ export function getConnectionErrorMessage(error: any): string {
 			return 'DNS resolution failed. Please check your network connection and host address.';
 
 		default:
-			// For unknown errors, provide the original message but clean it up
-			return errorMessage.replace(/^connection\s+failed:\s*/i, '');
+			return 'Database connection failed. Check your Neon connection details.';
 	}
 }

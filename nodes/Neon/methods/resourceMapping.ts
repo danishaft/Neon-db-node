@@ -1,6 +1,6 @@
 import type { ILoadOptionsFunctions, ResourceMapperFields } from 'n8n-workflow';
 
-import { configureNeon } from '../transport';
+import { withNeonDatabase } from '../transport';
 import type { NeonNodeCredentials } from '../helpers/interface';
 import { mapPostgresType, getEnumValues } from '../helpers/utils';
 
@@ -8,8 +8,6 @@ export async function getMappingColumns(
 	this: ILoadOptionsFunctions,
 ): Promise<ResourceMapperFields> {
 	const credentials = await this.getCredentials<NeonNodeCredentials>('neonApi');
-
-	const { db } = await configureNeon(credentials);
 
 	const schema = this.getNodeParameter('schema', 0, {
 		extractValue: true,
@@ -19,10 +17,9 @@ export async function getMappingColumns(
 		extractValue: true,
 	}) as string;
 
-	// Operation parameter not needed for resource mapping
-
-	// Get enhanced column schema with all metadata
-	const columns = await db.any(`
+	return withNeonDatabase(credentials, async (db) => {
+		const columns = await db.any(
+			`
 		SELECT
 			column_name,
 			data_type,
@@ -37,43 +34,35 @@ export async function getMappingColumns(
 		FROM information_schema.columns
 		WHERE table_schema = $1 AND table_name = $2
 		ORDER BY ordinal_position
-	`, [schema, table]);
+	`,
+			[schema, table],
+		);
 
-	const fields = columns.map((col) => {
-		const canBeUsedToMatch = true; // For now, all columns can be used to match
-		const type = mapPostgresType(col.data_type);
+		const fields = await Promise.all(
+			columns.map(async (column) => {
+				const type = mapPostgresType(column.data_type);
+				const enumValues =
+					type === 'options' && column.udt_name ? await getEnumValues(db, column.udt_name) : [];
+				const options = enumValues.map((value) => ({ name: value, value }));
+				const hasDefault = Boolean(column.column_default);
+				const isGenerated =
+					column.is_generated === 'ALWAYS' ||
+					['ALWAYS', 'BY DEFAULT'].includes(column.identity_generation ?? '');
+				const nullable = column.is_nullable === 'YES';
 
-		// Get enum options if it's an enum type
-		let options;
-		if (type === 'options' && col.udt_name) {
-			// Use the existing getEnumValues function from utils
-			getEnumValues(db, col.udt_name).then(enumValues => {
-				if (enumValues.length > 0) {
-					options = enumValues.map(value => ({ name: value, value }));
-				}
-			}).catch(() => {
-				// Graceful fallback if enum query fails
-				options = undefined;
-			});
-		}
+				return {
+					id: column.column_name,
+					displayName: column.column_name,
+					required: !nullable && !hasDefault && !isGenerated,
+					defaultMatch: column.column_name === 'id',
+					display: true,
+					type,
+					canBeUsedToMatch: true,
+					options: options.length > 0 ? options : undefined,
+				};
+			}),
+		);
 
-		const hasDefault = Boolean(col.column_default);
-		const isGenerated =
-			col.is_generated === 'ALWAYS' ||
-			['ALWAYS', 'BY DEFAULT'].includes(col.identity_generation ?? '');
-		const nullable = col.is_nullable === 'YES';
-
-		return {
-			id: col.column_name,
-			displayName: col.column_name,
-			required: !nullable && !hasDefault && !isGenerated,
-			defaultMatch: (col.column_name === 'id' && canBeUsedToMatch) || false,
-			display: true,
-			type,
-			canBeUsedToMatch,
-			options,
-		};
+		return { fields };
 	});
-
-	return { fields };
 }

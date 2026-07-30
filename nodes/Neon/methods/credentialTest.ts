@@ -1,6 +1,10 @@
-import { ICredentialTestFunctions, ICredentialsDecrypted, INodeCredentialTestResult } from "n8n-workflow";
-import { NeonNodeCredentials } from "../helpers/interface";
-import { validateNeonCredentials } from "../transport";
+import {
+	ICredentialTestFunctions,
+	ICredentialsDecrypted,
+	INodeCredentialTestResult,
+} from 'n8n-workflow';
+import { NeonNodeCredentials } from '../helpers/interface';
+import { validateNeonCredentials } from '../transport';
 
 export async function neonApiCredentialTest(
 	this: ICredentialTestFunctions,

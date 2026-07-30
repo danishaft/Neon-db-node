@@ -1,4 +1,4 @@
-import { INodeProperties } from "n8n-workflow";
+import { INodeProperties } from 'n8n-workflow';
 
 import { schemaRLC, tableRLC } from '../common.description';
 import { description as selectDescription } from './select.operation';
@@ -64,4 +64,4 @@ export const description: INodeProperties[] = [
 	...deleteDescription,
 	// ExecuteQuery operation properties (imported from operations)
 	...executeQueryDescription,
-]
+];

@@ -1,18 +1,16 @@
-import { ILoadOptionsFunctions, INodePropertyOptions, NodeOperationError } from "n8n-workflow";
-import { NeonNodeCredentials } from "../helpers/interface";
-import { configureNeon } from "../transport";
-import { buildColumnDescription, getEnumValues } from "../helpers/utils";
+import { ILoadOptionsFunctions, INodePropertyOptions, NodeOperationError } from 'n8n-workflow';
+import { NeonNodeCredentials } from '../helpers/interface';
+import { withNeonDatabase } from '../transport';
+import { buildColumnDescription, getEnumValues } from '../helpers/utils';
+import { getErrorMessage } from '../helpers/errors';
 
 export async function getTableColumns(
-	this: ILoadOptionsFunctions
+	this: ILoadOptionsFunctions,
 ): Promise<INodePropertyOptions[]> {
 	const returnData: INodePropertyOptions[] = [];
 
 	try {
-		const credentials = await this.getCredentials('neonApi') as NeonNodeCredentials;
-		const { db } = await configureNeon(credentials);
-
-		// Get schema and table with extractValue support
+		const credentials = (await this.getCredentials('neonApi')) as NeonNodeCredentials;
 		const schema = this.getNodeParameter('schema', 'public', {
 			extractValue: true,
 		}) as string;
@@ -25,8 +23,9 @@ export async function getTableColumns(
 			return returnData;
 		}
 
-		// Enhanced column discovery with better metadata
-		const columns = await db.any(`
+		return withNeonDatabase(credentials, async (db) => {
+			const columns = await db.any(
+				`
 			SELECT
 				column_name,
 				data_type,
@@ -39,35 +38,32 @@ export async function getTableColumns(
 			FROM information_schema.columns
 			WHERE table_schema = $1 AND table_name = $2
 			ORDER BY ordinal_position
-		`, [schema, tableName]);
+		`,
+				[schema, tableName],
+			);
 
-		// Format the results with better descriptions and enum values
-		for (const column of columns) {
-			let description = buildColumnDescription(column);
+			for (const column of columns) {
+				let description = buildColumnDescription(column);
 
-			// Add enum values if it's an enum type
-			if (column.data_type === 'USER-DEFINED' && column.udt_name) {
-				try {
+				if (column.data_type === 'USER-DEFINED' && column.udt_name) {
 					const enumValues = await getEnumValues(db, column.udt_name);
 					if (enumValues.length > 0) {
 						description += `, Values: [${enumValues.join(', ')}]`;
 					}
-				} catch (error) {
-					// Gracefully handle enum discovery errors
-					console.warn(`Failed to get enum values for ${column.udt_name}:`, error.message);
 				}
+
+				returnData.push({
+					name: column.column_name,
+					value: column.column_name,
+					description,
+				});
 			}
-
-			returnData.push({
-				name: column.column_name,
-				value: column.column_name,
-				description: description,
-			});
-		}
-
+			return returnData;
+		});
 	} catch (error) {
-		throw new NodeOperationError(this.getNode(), `Failed to load columns: ${error.message}`);
+		throw new NodeOperationError(
+			this.getNode(),
+			`Failed to load columns: ${getErrorMessage(error)}`,
+		);
 	}
-
-	return returnData;
 }

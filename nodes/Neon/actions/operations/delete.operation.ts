@@ -6,9 +6,19 @@ import type {
 } from 'n8n-workflow';
 import { NodeOperationError } from 'n8n-workflow';
 
-import { addWhereClauses, mergeDisplayOptions} from '../../helpers/utils';
-import type { NeonDatabase, NeonNodeOptions, QueryValues, QueryWithValues, WhereClause } from '../../helpers/interface';
-import { combineConditionsCollection, optionsCollection, whereFixedCollection } from '../common.description';
+import { addWhereClauses, mergeDisplayOptions } from '../../helpers/utils';
+import type {
+	NeonNodeOptions,
+	QueryValues,
+	QueryWithValues,
+	WhereClause,
+} from '../../helpers/interface';
+import { executeQueries, toExecutionData } from '../../helpers/query-runner';
+import {
+	combineConditionsCollection,
+	optionsCollection,
+	whereFixedCollection,
+} from '../common.description';
 
 const properties: INodeProperties[] = [
 	{
@@ -63,7 +73,7 @@ const properties: INodeProperties[] = [
 			},
 		},
 	},
-	optionsCollection
+	optionsCollection,
 ];
 
 const displayOptions = {
@@ -82,15 +92,13 @@ export async function execute(
 	this: IExecuteFunctions,
 	items: INodeExecutionData[],
 	nodeOptions: NeonNodeOptions,
-	_db?: NeonDatabase,
 ): Promise<INodeExecutionData[]> {
-	const returnData: INodeExecutionData[] = [];
-	const db = (nodeOptions as any).db;
+	const db = nodeOptions.db;
 
 	if (!db) {
 		throw new NodeOperationError(
 			this.getNode(),
-			'Database connection not provided to delete operation'
+			'Database connection not provided to delete operation',
 		);
 	}
 
@@ -127,7 +135,7 @@ export async function execute(
 			// Add combine conditions clause if specified
 			const combineConditions = this.getNodeParameter('combineConditions', i, 'AND') as string;
 			const whereClauses =
-			((this.getNodeParameter('where', i, []) as IDataObject).values as WhereClause[]) || [];
+				((this.getNodeParameter('where', i, []) as IDataObject).values as WhereClause[]) || [];
 
 			[query, values] = addWhereClauses(
 				this.getNode(),
@@ -138,11 +146,11 @@ export async function execute(
 				combineConditions,
 			);
 
-			if(query === '') {
+			if (query === '') {
 				throw new NodeOperationError(
 					this.getNode(),
 					'Invalid delete command, only drop, delete and truncate are supported',
-					{ itemIndex: i }
+					{ itemIndex: i },
 				);
 			}
 		}
@@ -151,7 +159,7 @@ export async function execute(
 			throw new NodeOperationError(
 				this.getNode(),
 				'Invalid delete command, only drop, delete and truncate are supported',
-				{ itemIndex: i }
+				{ itemIndex: i },
 			);
 		}
 
@@ -163,36 +171,6 @@ export async function execute(
 		queries.push({ query, values });
 	}
 
-	// Execute all queries
-	for (let i = 0; i < queries.length; i++) {
-		const { query, values } = queries[i];
-		const executionMode = nodeOptions.queryMode || 'single';
-		const continueOnFail = executionMode === 'independently';
-		let result;
-
-			if (executionMode === 'transaction') {
-				result = await db.tx(async (t: any) => {
-					return await t.any(query, values);
-				});
-			} else if (executionMode === 'independently') {
-				try {
-					result = await db.any(query, values);
-				} catch (error) {
-					if (!continueOnFail) {
-						throw error;
-					}
-					console.warn(`Query failed but continuing due to continueOnFail: ${error.message}`);
-					result = []; // Empty result for failed query
-				}
-			} else {
-				result = await db.any(query, values); // Single query mode
-			}
-
-			// Add results to return data
-			for (const row of result) {
-				returnData.push({ json: row });
-			}
-	}
-
-	return returnData;
+	const results = await executeQueries(db, queries, nodeOptions.queryMode ?? 'single');
+	return toExecutionData(results);
 }

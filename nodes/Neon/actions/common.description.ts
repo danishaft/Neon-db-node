@@ -35,7 +35,8 @@ export const optionsCollection: INodeProperties = {
 			displayName: 'Output Column Names or IDs',
 			name: 'outputColumns',
 			type: 'multiOptions',
-			description: 'Choose from the list, or specify IDs using an <a href="https://docs.n8n.io/code/expressions/" target="_blank">expression</a>. Choose from the list, or specify IDs using an <a href="https://docs.n8n.io/code/expressions/">expression</a>.',
+			description:
+				'Choose from the list, or specify IDs using an <a href="https://docs.n8n.io/code/expressions/" target="_blank">expression</a>. Choose from the list, or specify IDs using an <a href="https://docs.n8n.io/code/expressions/">expression</a>.',
 			typeOptions: {
 				loadOptionsMethod: 'getTableColumns',
 				loadOptionsDependsOn: ['schema', 'table'],
@@ -148,7 +149,7 @@ export const schemaRLC: INodeProperties = {
 			type: 'list',
 			typeOptions: {
 				searchListMethod: 'getSchemas',
-			}
+			},
 		},
 		{
 			displayName: 'Name',
@@ -177,7 +178,7 @@ export const tableRLC: INodeProperties = {
 			type: 'list',
 			typeOptions: {
 				searchListMethod: 'getTables',
-			}
+			},
 		},
 		{
 			displayName: 'Name',
@@ -192,7 +193,6 @@ export const tableRLC: INodeProperties = {
 		},
 	},
 };
-
 
 export const whereFixedCollection: INodeProperties = {
 	displayName: 'Select Rows',
@@ -213,7 +213,8 @@ export const whereFixedCollection: INodeProperties = {
 					displayName: 'Column Name or ID',
 					name: 'column',
 					type: 'options',
-					description: 'Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/" target="_blank">expression</a>. Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>.',
+					description:
+						'Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/" target="_blank">expression</a>. Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>.',
 					default: '',
 					placeholder: 'e.g. ID',
 					typeOptions: {
@@ -301,7 +302,8 @@ export const sortFixedCollection: INodeProperties = {
 					displayName: 'Column Name or ID',
 					name: 'column',
 					type: 'options',
-					description: 'Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/" target="_blank">expression</a>. Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>.',
+					description:
+						'Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/" target="_blank">expression</a>. Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>.',
 					default: '',
 					typeOptions: {
 						loadOptionsMethod: 'getTableColumns',

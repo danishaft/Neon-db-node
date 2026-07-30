@@ -6,8 +6,15 @@ import type {
 } from 'n8n-workflow';
 import { NodeOperationError } from 'n8n-workflow';
 
-import { getResolvables, stringToArray, isJSON, mergeDisplayOptions, shouldContinueOnFail, replaceEmptyStringsByNulls } from '../../helpers/utils';
-import type { NeonDatabase, NeonNodeOptions, QueryWithValues } from '../../helpers/interface';
+import {
+	getResolvables,
+	stringToArray,
+	isJSON,
+	mergeDisplayOptions,
+	replaceEmptyStringsByNulls,
+} from '../../helpers/utils';
+import type { NeonNodeOptions, QueryWithValues } from '../../helpers/interface';
+import { executeQueries, toExecutionData } from '../../helpers/query-runner';
 import { optionsCollection } from '../common.description';
 
 const properties: INodeProperties[] = [
@@ -43,16 +50,13 @@ export async function execute(
 	this: IExecuteFunctions,
 	items: INodeExecutionData[],
 	nodeOptions: NeonNodeOptions,
-	_db?: NeonDatabase,
 ): Promise<INodeExecutionData[]> {
-	// Execute queries using the database connection passed from main node
-	const returnData: INodeExecutionData[] = [];
-	const db = (nodeOptions as any).db;
+	const db = nodeOptions.db;
 
 	if (!db) {
 		throw new NodeOperationError(
 			this.getNode(),
-			'Database connection not provided to executeQuery operation'
+			'Database connection not provided to executeQuery operation',
 		);
 	}
 
@@ -79,7 +83,7 @@ export async function execute(
 		if (typeof queryParameter === 'string') {
 			// const node = this.getNode();
 			// const rawReplacements = (node.parameters.options as IDataObject)?.query as string;
-			const rawReplacements = queryParameter
+			const rawReplacements = queryParameter;
 
 			if (rawReplacements) {
 				const rawValues = rawReplacements.replace(/^=+/, '');
@@ -102,16 +106,14 @@ export async function execute(
 					values.push(...stringToArray(rawValues));
 				}
 			}
+		} else if (Array.isArray(queryParameter)) {
+			values = queryParameter as Array<IDataObject | string>;
 		} else {
-			if (Array.isArray(query)) {
-				values = query as IDataObject[];
-			} else {
-				throw new NodeOperationError(
-					this.getNode(),
-					'Query Parameters must be a string of comma-separated values or an array of values',
-					{ itemIndex: index },
-				);
-			}
+			throw new NodeOperationError(
+				this.getNode(),
+				'Query Parameters must be a string of comma-separated values or an array of values',
+				{ itemIndex: index },
+			);
 		}
 
 		// Handle quoted literals (e.g., '$1' becomes $1) - simplified for Neon
@@ -128,56 +130,6 @@ export async function execute(
 		return { query, values, options: { partial: true } };
 	});
 
-
-	// Process each query
-	for (let i = 0; i < queries.length; i++) {
-		const { query, values } = queries[i];
-		const executionMode = nodeOptions.queryMode || 'single';
-		const continueOnFail = shouldContinueOnFail(executionMode);
-
-		try {
-			// Execute query with proper parameter binding
-			let result;
-			if (executionMode === 'transaction') {
-				// Execute in transaction
-				result = await db.tx(async (t: any) => {
-					return await t.any(query, values);
-				});
-			} else if (executionMode === 'independently') {
-				// Execute independently with continue on fail option
-				try {
-					result = await db.any(query, values);
-				} catch (error) {
-					if (!continueOnFail) {
-						throw error;
-					}
-					// If continue on fail is enabled, log the error but continue
-					console.warn(`Query failed but continuing due to continueOnFail: ${error.message}`);
-					result = []; // Empty result for failed query
-				}
-			} else {
-				// Single query mode (default)
-				result = await db.any(query, values);
-			}
-
-			// Return results
-			for (const item of result) {
-				returnData.push({
-					json: item,
-				});
-			}
-		} catch (error) {
-			if (executionMode === 'independently' && continueOnFail) {
-				// Continue on fail is enabled, skip this query
-				continue;
-			}
-			throw new NodeOperationError(
-				this.getNode(),
-				`Query execution failed: ${error.message}`,
-				{ itemIndex: i }
-			);
-		}
-	}
-
-	return returnData;
+	const results = await executeQueries(db, queries, nodeOptions.queryMode ?? 'single');
+	return toExecutionData(results);
 }

@@ -5,10 +5,16 @@ import type {
 	IDataObject,
 } from 'n8n-workflow';
 import { NodeOperationError } from 'n8n-workflow';
-import { checkItemAgainstSchema, convertValuesToObject, getTableSchema, mergeDisplayOptions, replaceEmptyStringsByNulls, shouldContinueOnFail } from '../../helpers/utils';
-import type { NeonClient, NeonDatabase, NeonNodeOptions, QueryValues, QueryWithValues } from '../../helpers/interface';
+import {
+	checkItemAgainstSchema,
+	convertValuesToObject,
+	getTableSchema,
+	mergeDisplayOptions,
+	replaceEmptyStringsByNulls,
+} from '../../helpers/utils';
+import type { NeonNodeOptions, QueryValues, QueryWithValues } from '../../helpers/interface';
+import { executeQueries, toExecutionData } from '../../helpers/query-runner';
 import { optionsCollection } from '../common.description';
-
 
 const properties: INodeProperties[] = [
 	// Data to send for insert operations
@@ -82,17 +88,17 @@ const properties: INodeProperties[] = [
 			},
 		],
 	},
-	optionsCollection
+	optionsCollection,
 ];
 
 const displayOptions = {
-		show: {
-			resource: ['row'],
-			operation: ['insert'],
-		},
-		hide: {
-			table: [''],
-		},
+	show: {
+		resource: ['row'],
+		operation: ['insert'],
+	},
+	hide: {
+		table: [''],
+	},
 };
 
 export const description = mergeDisplayOptions(displayOptions, properties);
@@ -101,35 +107,32 @@ export async function execute(
 	this: IExecuteFunctions,
 	items: INodeExecutionData[],
 	nodeOptions: NeonNodeOptions,
-	_db?: NeonDatabase,
-	client?: NeonClient,
 ): Promise<INodeExecutionData[]> {
-	const returnData: INodeExecutionData[] = [];
-	const db =  (nodeOptions as any).db;
+	const db = nodeOptions.db;
 
 	if (!db) {
 		throw new NodeOperationError(
 			this.getNode(),
-			'Database connection not provided to insert operation'
+			'Database connection not provided to insert operation',
 		);
 	}
 	// Replace empty strings with nulls
 	const processedItems = replaceEmptyStringsByNulls(
 		items,
-		nodeOptions.replaceEmptyStrings || false
+		nodeOptions.replaceEmptyStrings || false,
 	);
 
 	// Get schema and table from node parameters
-	let schema = this.getNodeParameter('schema', 0, undefined, {
+	const schema = this.getNodeParameter('schema', 0, undefined, {
 		extractValue: true,
 	}) as string;
 
-	let table = this.getNodeParameter('table', 0, undefined, {
+	const table = this.getNodeParameter('table', 0, undefined, {
 		extractValue: true,
 	}) as string;
 
 	// Get actual neon table schema for the table
-	let tableSchema = await getTableSchema(db, schema, table);
+	const tableSchema = await getTableSchema(db, schema, table);
 	const queries: QueryWithValues[] = processedItems.map((_, index) => {
 		const mappingMode = this.getNodeParameter('mappingMode', index) as string;
 
@@ -139,7 +142,7 @@ export async function execute(
 		}
 
 		let query = `INSERT INTO $1:name.$2:name($3:name) VALUES($3:csv)${onConflict}`;
-		let values: QueryValues = [schema, table];
+		const values: QueryValues = [schema, table];
 
 		let item: IDataObject = {};
 		if (mappingMode === 'autoMapInputData') {
@@ -157,51 +160,15 @@ export async function execute(
 		values.push(checkItemAgainstSchema(this.getNode(), item, tableSchema, index));
 
 		// For INSERT operations, just add RETURNING * directly
-		if(Object.keys(item).length === 0) {
+		if (Object.keys(item).length === 0) {
 			query = 'INSERT INTO $1:name.$2:name DEFAULT VALUES RETURNING *';
 		} else {
 			query = query + ' RETURNING *';
 		}
 
 		return { query, values };
-	})
+	});
 
-
-	// Execute all queries (like Postgres node)
-	for (let i = 0; i < queries.length; i++) {
-		const { query, values } = queries[i];
-		const executionMode = nodeOptions.queryMode || 'single';
-		const continueOnFail = shouldContinueOnFail(executionMode);
-		let result;
-		if(executionMode === 'transaction') {
-			// Execute in transaction
-			result = await db.tx(async (t: any) => {
-				return await t.any(query, values);
-			})
-		}else if (executionMode === 'independently') {
-			// Execute independently with continue on fail option
-			try{
-				result = await db.any(query, values);
-			} catch (error) {
-				if (!continueOnFail) {
-					throw error;
-				}
-				// If continue on fail is enabled, log the error but continue
-				console.warn(`Query failed but continuing due to continueOnFail: ${error.message}`);
-				result = []; // Empty result for failed query
-			}
-		} else {
-			// Single query mode (default)
-			result = await db.any(query, values);
-		}
-
-		// Add results to return data
-		for (const row of result) {
-			returnData.push({
-				json: row,
-			});
-		}
-	}
-
-	return returnData;
+	const results = await executeQueries(db, queries, nodeOptions.queryMode ?? 'single');
+	return toExecutionData(results);
 }

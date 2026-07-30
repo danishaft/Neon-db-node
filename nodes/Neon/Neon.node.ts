@@ -1,36 +1,85 @@
 import type {
-	INodeType,
-	INodeTypeDescription,
 	IExecuteFunctions,
 	INodeExecutionData,
+	INodeType,
+	INodeTypeDescription,
 } from 'n8n-workflow';
-import { NodeConnectionType, NodeOperationError } from 'n8n-workflow';
-import { configureNeon } from './transport';
-import type { NeonNodeCredentials, NeonNodeOptions } from './helpers/interface';
-import { execute as executeQueryOperation } from './actions/operations/executeQuery.operation';
-import { execute as selectExecute } from './actions/operations/select.operation';
-import { execute as insertExecute } from './actions/operations/insert.operation';
-import { execute as updateExecute } from './actions/operations/update.operation';
-import { execute as deleteExecute } from './actions/operations/delete.operation';
-import { description as databaseResourceDescription } from './actions/operations';
-import { getTableColumns, getMappingColumns, getSchemas, getTables } from './methods';
-import { neonApiCredentialTest } from './methods/credentialTest';
+import { NodeConnectionTypes, NodeOperationError } from 'n8n-workflow';
 
+import { description as databaseResourceDescription } from './actions/operations';
+import { execute as deleteRows } from './actions/operations/delete.operation';
+import { execute as executeQuery } from './actions/operations/executeQuery.operation';
+import { execute as insertRows } from './actions/operations/insert.operation';
+import { execute as selectRows } from './actions/operations/select.operation';
+import { execute as updateRows } from './actions/operations/update.operation';
+import { getErrorMessage } from './helpers/errors';
+import type { NeonNodeCredentials, NeonNodeOptions, QueryMode } from './helpers/interface';
+import { getMappingColumns, getSchemas, getTableColumns, getTables } from './methods';
+import { neonApiCredentialTest } from './methods/credentialTest';
+import { configureNeon } from './transport';
+
+type Operation = 'delete' | 'executeQuery' | 'insert' | 'select' | 'update';
+
+type OperationExecutor = (
+	this: IExecuteFunctions,
+	items: INodeExecutionData[],
+	options: NeonNodeOptions,
+) => Promise<INodeExecutionData[]>;
+
+const operationExecutors: Record<Operation, OperationExecutor> = {
+	delete: deleteRows,
+	executeQuery,
+	insert: insertRows,
+	select: selectRows,
+	update: updateRows,
+};
+
+function isOperation(value: string): value is Operation {
+	return value in operationExecutors;
+}
+
+function getNodeOptions(context: IExecuteFunctions): NeonNodeOptions {
+	return {
+		cascade: context.getNodeParameter('options.cascade', 0, false) as boolean,
+		delayClosingIdleConnection: context.getNodeParameter(
+			'options.delayClosingIdleConnection',
+			0,
+			0,
+		) as number,
+		outputColumns: context.getNodeParameter('options.outputColumns', 0, []) as string[],
+		outputLargeFormatNumberAs: context.getNodeParameter(
+			'options.outputLargeFormatNumberAs',
+			0,
+			'string',
+		) as 'number' | 'string',
+		queryMode: context.getNodeParameter('options.queryMode', 0, 'single') as QueryMode,
+		queryParameters: context.getNodeParameter('options.queryParameters', 0, '') as string,
+		replaceEmptyStrings: context.getNodeParameter(
+			'options.replaceEmptyStrings',
+			0,
+			false,
+		) as boolean,
+		skipOnConflict: context.getNodeParameter('options.skipOnConflict', 0, false) as boolean,
+	};
+}
 
 export class Neon implements INodeType {
 	description: INodeTypeDescription = {
 		displayName: 'Neon',
 		name: 'neon',
-		icon: 'file:neon.svg',
+		icon: {
+			light: 'file:neon.svg',
+			dark: 'file:neon.dark.svg',
+		},
 		group: ['input'],
 		version: 1,
 		subtitle: '={{$parameter["operation"] + ": " + $parameter["resource"]}}',
-		description: 'Connect to Neon database and perform operations',
+		description: 'Query and modify a Neon Postgres database',
 		defaults: {
 			name: 'Neon',
 		},
-		inputs: [NodeConnectionType.Main],
-		outputs: [NodeConnectionType.Main],
+		inputs: [NodeConnectionTypes.Main],
+		outputs: [NodeConnectionTypes.Main],
 		usableAsTool: true,
 		credentials: [
 			{
@@ -49,7 +98,7 @@ export class Neon implements INodeType {
 					{
 						name: 'Row',
 						value: 'row',
-						description: 'Work with individual rows',
+						description: 'Work with rows in a database table',
 					},
 				],
 				default: 'row',
@@ -60,118 +109,49 @@ export class Neon implements INodeType {
 
 	methods = {
 		loadOptions: {
-			// Column Discovery (for dropdowns)
-			getTableColumns
+			getTableColumns,
 		},
-
 		listSearch: {
-			// Schema Discovery (for resource locator)
 			getSchemas,
-
-			// Table Discovery (for resource locator)
 			getTables,
 		},
-
 		resourceMapping: {
-			// Resource Mapping (for advanced field mapping)
 			getMappingColumns,
 		},
-
 		credentialTest: {
-			neonApiCredentialTest
+			neonApiCredentialTest,
 		},
 	};
 
 	async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
-		const returnData: INodeExecutionData[] = [];
 		const resource = this.getNodeParameter('resource', 0) as string;
 		const operation = this.getNodeParameter('operation', 0) as string;
 
-		// Get credentials
-		const credentials = await this.getCredentials('neonApi') as NeonNodeCredentials;
-
-		if (resource === 'row') {
-			if (operation === 'executeQuery') {
-				// Use separated executeQuery operation
-				const items = this.getInputData();
-				const nodeOptions: NeonNodeOptions = {
-					queryMode: this.getNodeParameter('options.queryMode', 0, 'single') as any,
-					queryParameters: this.getNodeParameter('options.queryParameters', 0, '') as string,
-					delayClosingIdleConnection: this.getNodeParameter('options.delayClosingIdleConnection', 0, 0) as number,
-					outputLargeFormatNumberAs: this.getNodeParameter('options.outputLargeFormatNumberAs', 0, 'string') as 'string' | 'number',
-					replaceEmptyStrings: this.getNodeParameter('options.replaceEmptyStrings', 0, false) as boolean,
-				};
-
-				// Get database connection
-				const { db } = await configureNeon(credentials, nodeOptions);
-
-				// Call the operation with database connection
-				const result = await executeQueryOperation.call(this, items, { ...nodeOptions, db });
-				returnData.push(...result);
-			} else if (operation === 'select') {
-					const items = this.getInputData();
-					const nodeOptions: NeonNodeOptions = {
-						queryMode: this.getNodeParameter('options.queryMode', 0, 'single') as any,
-						delayClosingIdleConnection: this.getNodeParameter('options.delayClosingIdleConnection', 0, 0) as number,
-						outputLargeFormatNumberAs: this.getNodeParameter('options.outputLargeFormatNumberAs', 0, 'string') as 'string' | 'number',
-						outputColumns: this.getNodeParameter('options.outputColumns', 0, []) as string[],
-					};
-
-					const { db } = await configureNeon(credentials, nodeOptions);
-					const result = await selectExecute.call(this, items, { ...nodeOptions, db } as any);
-					returnData.push(...result);
-			} else if (operation === 'insert') {
-				// Use separated INSERT operation
-					const items = this.getInputData();
-					const nodeOptions: NeonNodeOptions = {
-						queryMode: this.getNodeParameter('options.queryMode', 0, 'single') as any,
-						delayClosingIdleConnection: this.getNodeParameter('options.delayClosingIdleConnection', 0, 0) as number,
-						outputLargeFormatNumberAs: this.getNodeParameter('options.outputLargeFormatNumberAs', 0, 'string') as 'string' | 'number',
-						replaceEmptyStrings: this.getNodeParameter('options.replaceEmptyStrings', 0, false) as boolean,
-						skipOnConflict: this.getNodeParameter('options.skipOnConflict', 0, false) as boolean
-					};
-
-					const { db, client } = await configureNeon(credentials, nodeOptions);
-
-					const result = await insertExecute.call(this, items, { ...nodeOptions, db, client} as any);
-					returnData.push(...result);
-			} else if (operation === 'update') {
-				// Use separated UPDATE operation
-					const items = this.getInputData();
-					const nodeOptions = {
-						queryMode: this.getNodeParameter('options.queryMode', 0, 'single') as any,
-						delayClosingIdleConnection: this.getNodeParameter('options.delayClosingIdleConnection', 0, 0) as number,
-						outputLargeFormatNumberAs: this.getNodeParameter('options.outputLargeFormatNumberAs', 0, 'string') as 'string' | 'number',
-						replaceEmptyStrings: this.getNodeParameter('options.replaceEmptyStrings', 0, false) as boolean,
-					};
-
-					const { db } = await configureNeon(credentials);
-
-					const result = await updateExecute.call(this, items, { ...nodeOptions, db } as any);
-					returnData.push(...result);
-			} else if (operation === 'delete') {
-				// Use separated DELETE operation
-				try {
-					const { db } = await configureNeon(credentials);
-					const items = this.getInputData();
-					const nodeOptions = {};
-					const result = await deleteExecute.call(this, items, { ...nodeOptions, db } as any);
-					returnData.push(...result);
-				} catch (error) {
-					throw new NodeOperationError(this.getNode(), `DELETE operation failed: ${error.message}`);
-				}
-			} else {
-				// Unknown operation
-				returnData.push({
-					json: {
-						message: `Operation '${operation}' not yet implemented`,
-						operation,
-						resource,
-					},
-				});
-			}
+		if (resource !== 'row' || !isOperation(operation)) {
+			throw new NodeOperationError(
+				this.getNode(),
+				`Unsupported Neon operation: ${resource}.${operation}`,
+			);
 		}
 
-		return [returnData];
+		const credentials = await this.getCredentials<NeonNodeCredentials>('neonApi');
+		const options = getNodeOptions(this);
+		const connection = await configureNeon(credentials, options);
+
+		try {
+			const result = await operationExecutors[operation].call(this, this.getInputData(), {
+				...options,
+				db: connection.db,
+			});
+			return [result];
+		} catch (error) {
+			if (error instanceof NodeOperationError) {
+				throw new NodeOperationError(this.getNode(), error);
+			}
+
+			throw new NodeOperationError(this.getNode(), getErrorMessage(error));
+		} finally {
+			await connection.close();
+		}
 	}
 }

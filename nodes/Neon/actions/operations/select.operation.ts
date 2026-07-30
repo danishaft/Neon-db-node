@@ -6,9 +6,25 @@ import type {
 } from 'n8n-workflow';
 import { NodeOperationError } from 'n8n-workflow';
 
-import { addSortRules, mergeDisplayOptions, replaceEmptyStringsByNulls, shouldContinueOnFail, addWhereClauses } from '../../helpers/utils';
-import type { NeonDatabase, NeonNodeOptions, QueryValues, QueryWithValues, WhereClause } from '../../helpers/interface';
-import { whereFixedCollection, sortFixedCollection, combineConditionsCollection, optionsCollection } from '../common.description';
+import {
+	addSortRules,
+	mergeDisplayOptions,
+	replaceEmptyStringsByNulls,
+	addWhereClauses,
+} from '../../helpers/utils';
+import type {
+	NeonNodeOptions,
+	QueryValues,
+	QueryWithValues,
+	WhereClause,
+} from '../../helpers/interface';
+import { executeQueries, toExecutionData } from '../../helpers/query-runner';
+import {
+	whereFixedCollection,
+	sortFixedCollection,
+	combineConditionsCollection,
+	optionsCollection,
+} from '../common.description';
 
 const properties: INodeProperties[] = [
 	{
@@ -45,7 +61,7 @@ const properties: INodeProperties[] = [
 	sortFixedCollection,
 	// Combine conditions (imported from commonDescription)
 	combineConditionsCollection,
-	optionsCollection
+	optionsCollection,
 ];
 
 const displayOptions = {
@@ -55,7 +71,7 @@ const displayOptions = {
 	},
 	hide: {
 		table: [''],
-	}
+	},
 };
 
 export const description = mergeDisplayOptions(displayOptions, properties);
@@ -64,23 +80,20 @@ export async function execute(
 	this: IExecuteFunctions,
 	items: INodeExecutionData[],
 	nodeOptions: NeonNodeOptions,
-	_db?: NeonDatabase,
-	client?: any,
 ): Promise<INodeExecutionData[]> {
-	const returnData: INodeExecutionData[] = [];
-	const db = (nodeOptions as any).db;
+	const db = nodeOptions.db;
 
 	if (!db) {
 		throw new NodeOperationError(
 			this.getNode(),
-			'Database connection not provided to select operation'
+			'Database connection not provided to select operation',
 		);
 	}
 
 	// Replace empty strings with nulls
 	const processedItems = replaceEmptyStringsByNulls(
 		items,
-		nodeOptions.replaceEmptyStrings || false
+		nodeOptions.replaceEmptyStrings || false,
 	);
 
 	// Get schema and table from node parameters
@@ -94,7 +107,7 @@ export async function execute(
 
 	// Build queries for each item
 	const queries: QueryWithValues[] = processedItems.map((_, index) => {
-		let query =''
+		let query = '';
 		let values: QueryValues = [schema, table];
 
 		// Get output columns
@@ -138,42 +151,6 @@ export async function execute(
 		return { query, values };
 	});
 
-	// Execute all queries
-	for (let i = 0; i < queries.length; i++) {
-		const { query, values } = queries[i];
-		const executionMode = nodeOptions.queryMode || 'single';
-		const continueOnFail = shouldContinueOnFail(executionMode);
-		let result;
-
-			if (executionMode === 'transaction') {
-				// Execute in transaction
-				result = await db.tx(async (t: any) => {
-					return await t.any(query, values);
-				});
-			} else if (executionMode === 'independently') {
-				// Execute independently with continue on fail option
-				try {
-					result = await db.any(query, values);
-				} catch (error) {
-					if (!continueOnFail) {
-					throw error;
-				}
-				// If continue on fail is enabled, log the error but continue
-				console.warn(`Query failed but continuing due to continueOnFail: ${error.message}`);
-				result = []; // Empty result for failed query
-			}
-			} else {
-				// Single query mode (default)
-				result = await db.any(query, values);
-			}
-
-			// Add results to return data
-			for (const row of result) {
-				returnData.push({
-					json: row,
-				});
-			}
-	}
-
-	return returnData;
+	const results = await executeQueries(db, queries, nodeOptions.queryMode ?? 'single');
+	return toExecutionData(results);
 }
