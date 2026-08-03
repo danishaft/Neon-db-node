@@ -17,8 +17,8 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-      - uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v4
 
   codeql:
     runs-on: ubuntu-latest
@@ -26,18 +26,18 @@ jobs:
       contents: read
       security-events: write
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-      - uses: github/codeql-action/init@0b88f91c1c313eec6a3c4ee6b8342cb564c2060c # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: github/codeql-action/init@d1ba80a13dd99fba24a470575428917156a28b43 # v4
         with:
           languages: javascript-typescript
-      - uses: github/codeql-action/analyze@0b88f91c1c313eec6a3c4ee6b8342cb564c2060c # v4
+      - uses: github/codeql-action/analyze@d1ba80a13dd99fba24a470575428917156a28b43 # v4
 
   secrets:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
+      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
